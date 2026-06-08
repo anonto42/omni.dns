@@ -122,7 +122,7 @@ func (db *DB) Flush() {
 	}
 }
 
-func (db *DB) PruneLogs(t time.Time) {}
+func (db *DB) PruneLogs(t time.Time)                       {}
 func (db *DB) GetStats() models.Stats                      { return models.Stats{} }
 func (db *DB) GetLogs(limit int) []models.QueryLog         { return nil }
 func (db *DB) ClearLogs()                                  {}

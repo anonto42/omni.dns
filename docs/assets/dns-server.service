@@ -1,0 +1,12 @@
+[Unit]
+Description=DNS Server Persistent Service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/dns-server
+Restart=always
+User=dnsuser
+Group=dnsuser
+
+[Install]
+WantedBy=multi-user.target

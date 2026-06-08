@@ -8,7 +8,9 @@ services:
       target: dev
     image: dns-server:dev
     container_name: dns-server-dev
-    network_mode: host
+    ports:
+      - "5354:5353/udp"
+      - "8080:8080"
     environment:
       - DNS_PORT=5353
       - HTTP_PORT=8080
@@ -23,10 +25,10 @@ services:
     image: node:22-alpine
     working_dir: /app
     volumes:
-      - ./frontend/apps/web-app:/app
+      - ./frontend:/app
     ports:
       - "5173:5173"
-    command: npm run dev -- --host
+    entrypoint: ["/bin/sh", "-c", "npm install && npm run dev -- --host"]
 
 volumes:
   dns-data:
