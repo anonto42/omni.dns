@@ -4,17 +4,19 @@ services:
   dns-server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: backend/Dockerfile
+      target: production
     image: dns-server:latest
     container_name: dns-server
     restart: unless-stopped
     network_mode: host
-    environment:
-      - TZ=UTC
-    volumes:
-      - dns-data:/app/data
     cap_add:
       - NET_BIND_SERVICE
+    volumes:
+      - dns-data:/app/data
+    environment:
+      - DB_PATH=/app/data/dns.db
+      - STATIC_DIR=/app/web/dist
     ports:
       - "53:53/udp"
       - "53:53/tcp"

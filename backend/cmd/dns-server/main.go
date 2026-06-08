@@ -1,0 +1,240 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/sohidul/dns-server/internal/api"
+	"github.com/sohidul/dns-server/internal/db"
+	"github.com/sohidul/dns-server/internal/dns"
+)
+
+var (
+	dnsPort     = flag.Int("dns-port", 53, "DNS server port")
+	httpPort    = flag.Int("http-port", 8080, "HTTP API port")
+	dbPath      = flag.String("db", "data/dns.db", "SQLite database path")
+	blockNX     = flag.Bool("block-nxdomain", false, "Return NXDOMAIN for blocked domains")
+	cacheSize   = flag.Int("cache-size", 1000, "DNS cache size")
+	upstreamDNS = flag.String("upstream", "1.1.1.1:53", "Upstream DNS server")
+	staticDir   = flag.String("static", "", "Directory with static files to serve at /")
+	logPrune    = flag.Duration("log-prune", 0, "Auto-prune logs older than this (e.g. 72h)")
+	logFormat   = flag.String("log-format", "text", "Log format: text or json")
+	logLevel    = flag.String("log-level", "info", "Log level: debug, info, warn, error")
+)
+
+// @title           ESP32 DNS Server API
+// @version         1.0
+// @description     API for managing custom DNS records and blocklists.
+// @host            localhost:8080
+// @BasePath        /api
+
+func main() {
+	flag.Parse()
+
+	var level slog.Level
+	switch *logLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+	var logHandler slog.Handler
+	if *logFormat == "json" {
+		logHandler = slog.NewJSONHandler(os.Stderr, opts)
+	} else {
+		logHandler = slog.NewTextHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(logHandler))
+
+	if err := os.MkdirAll("data", 0755); err != nil {
+		slog.Error("create data directory", "error", err)
+		os.Exit(1)
+	}
+
+	database, err := db.Open(*dbPath)
+	if err != nil {
+		slog.Error("open database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	dnsCfg := &dns.Config{
+		BlockNXDOMAIN: *blockNX,
+		CacheSize:     *cacheSize,
+		Upstreams: []dns.Upstream{
+			{Addr: *upstreamDNS, Timeout: 3 * time.Second},
+			{Addr: "8.8.8.8:53", Timeout: 5 * time.Second},
+		},
+	}
+	dnsHandler := dns.NewHandler(database, dnsCfg)
+
+	var wg sync.WaitGroup
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// --- UDP DNS ---
+	udpAddr := net.UDPAddr{Port: *dnsPort}
+	udpConn, err := net.ListenUDP("udp", &udpAddr)
+	if err != nil {
+		slog.Error("listen UDP", "port", *dnsPort, "error", err)
+		os.Exit(1)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		slog.Info("listening", "protocol", "UDP", "port", *dnsPort)
+		buf := make([]byte, 1500)
+		for {
+			select {
+			case <-quit:
+				return
+			default:
+			}
+			udpConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+			n, client, err := udpConn.ReadFromUDP(buf)
+			if err != nil {
+				continue
+			}
+			pkt := make([]byte, n)
+			copy(pkt, buf[:n])
+			go dnsHandler.HandleUDP(udpConn, client, pkt)
+		}
+	}()
+
+	// --- TCP DNS ---
+	tcpAddr := net.TCPAddr{Port: *dnsPort}
+	tcpListener, err := net.ListenTCP("tcp", &tcpAddr)
+	if err != nil {
+		slog.Warn("TCP listener unavailable (non-fatal)", "port", *dnsPort, "error", err)
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slog.Info("listening", "protocol", "TCP", "port", *dnsPort)
+			for {
+				select {
+				case <-quit:
+					tcpListener.Close()
+					return
+				default:
+				}
+				tcpListener.SetDeadline(time.Now().Add(500 * time.Millisecond))
+				conn, err := tcpListener.AcceptTCP()
+				if err != nil {
+					continue
+				}
+				go handleTCPConn(conn, dnsHandler)
+			}
+		}()
+	}
+
+	// --- HTTP API ---
+	r := chi.NewRouter()
+	r.Use(chimw.Logger)
+	r.Use(api.CORS)
+
+	api.RegisterRoutes(r, database, dnsHandler)
+
+	if isEmbedded() {
+		slog.Info("serving embedded static files")
+		r.Handle("/*", http.FileServer(getFileSystem()))
+	} else if *staticDir != "" {
+		slog.Info("serving static files", "dir", *staticDir)
+		fileServer(r, "/", http.Dir(*staticDir))
+	}
+
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", *httpPort),
+		Handler: r,
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		slog.Info("listening", "protocol", "HTTP", "port", *httpPort)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("HTTP server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// --- Log pruning ---
+	if *logPrune > 0 {
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			for range ticker.C {
+				database.PruneLogs(time.Now().Add(-*logPrune))
+			}
+		}()
+	}
+
+	<-quit
+	slog.Info("shutting down")
+
+	httpServer.Close()
+	udpConn.Close()
+	if tcpListener != nil {
+		tcpListener.Close()
+	}
+
+	wg.Wait()
+	slog.Info("shutdown complete")
+}
+
+func handleTCPConn(conn *net.TCPConn, handler *dns.Handler) {
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	lenBuf := make([]byte, 2)
+	if _, err := conn.Read(lenBuf); err != nil {
+		return
+	}
+	length := int(lenBuf[0])<<8 | int(lenBuf[1])
+	if length < 12 || length > 4096 {
+		return
+	}
+
+	data := make([]byte, length)
+	if _, err := conn.Read(data); err != nil {
+		return
+	}
+
+	clientIP := conn.RemoteAddr().(*net.TCPAddr).IP.String()
+	handler.HandleTCP(conn, data, clientIP)
+}
+
+func fileServer(r chi.Router, path string, root http.FileSystem) {
+	if strings.ContainsAny(path, "{}*") {
+		panic("FileServer does not permit any URL parameters.")
+	}
+
+	if path != "/" && path[len(path)-1] != '/' {
+		r.Get(path, http.RedirectHandler(path+"/", http.StatusMovedPermanently).ServeHTTP)
+		path += "/"
+	}
+	path += "*"
+
+	r.Get(path, func(w http.ResponseWriter, r *http.Request) {
+		rctx := chi.RouteContext(r.Context())
+		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
+		fs := http.StripPrefix(pathPrefix, http.FileServer(root))
+		fs.ServeHTTP(w, r)
+	})
+}

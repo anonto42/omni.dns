@@ -1,124 +1,83 @@
-# DNS Server
+# 🌐 DNS Server & Dashboard
 
-A full-featured DNS server for your home network, running on an ESP32 with MicroPython.
+A high-performance, ad-blocking DNS server and management dashboard built with Go and React. Designed for speed, reliability, and ease of use.
 
-## Features
+## 🚀 Features
 
-- **DNS Server** — Handles DNS queries on port 53
-- **Query Forwarding** — Unresolved domains forwarded to Cloudflare (1.1.1.1)
-- **Ad Blocking** — Blocks known tracker/ads domains (customizable)
-- **Custom Records** — Map domains to local IPs (e.g. `mydevice.local → 192.168.1.100`)
-- **Query Logging** — See every DNS request live in the dashboard
-- **Web Dashboard** — Stats, logs, manage records & blocklist from browser
+- **DNS Engine:** Standards-compliant implementation using `miekg/dns`.
+- **Ad Blocking:** Block trackers and ad domains with wildcard support.
+- **Custom Records:** Easily map hostnames to local IPs (e.g., `nas.local` → `192.168.1.50`).
+- **In-Memory Speed:** Blocklists and custom records are cached in memory for near-zero latency.
+- **Batch Logging:** High-throughput logging via buffered channel flushes to SQLite.
+- **Modern Dashboard:** Real-time log table, stats cards, and easy record management.
+- **Single Binary:** Embedded frontend assets for simple deployment.
 
-## Project Structure
+## 🏗️ Architecture
 
-| File | Purpose |
-|------|---------|
-| `main.py` | Entry point — connects WiFi, starts DNS + web server |
-| `dns_server.py` | Core DNS protocol — parses queries, builds responses, forwards upstream |
-| `dns_records.py` | Custom records & blocklist management (persisted to JSON files) |
-| `logger.py` | Query log buffer (keeps last 200 entries in memory) |
-| `web_server.py` | HTTP server — serves dashboard HTML + REST API |
-| `static/index.html` | Dashboard UI (served as-is from ESP32 flash) |
-| `blocklist.json` | Persisted blocked domains list |
-| `custom_records.json` | Persisted custom DNS mappings |
+- **Backend:** Go 1.22, SQLite (WAL mode), `chi` router, `miekg/dns`.
+- **Frontend:** React 18, Vite, Tailwind CSS, TypeScript.
+- **Orchestration:** Monorepo structure managed by `go.work` and a central `Makefile`.
 
-## How DNS Works (Learning)
+## 📂 Project Structure
 
-1. A device (phone/laptop) asks: "What is the IP of `google.com`?"
-2. This ESP32 catches the query (UDP packet on port 53)
-3. **Check blocklist** — if domain is blocked → return `0.0.0.0` (nowhere)
-4. **Check custom records** — if you mapped it → return your IP
-5. **Forward** — otherwise → send query to Cloudflare (1.1.1.1), return their answer
-6. **Log** — every query is recorded with timestamp, client IP, domain, action
+```text
+.
+├── backend/          # Go DNS & API Service
+├── frontend/         # React Dashboard Application
+├── .agents/          # AI Agent workspace for documentation & history
+├── go.work           # Go workspace configuration
+├── Makefile          # Central command hub
+└── BLUEPRINT.md      # Detailed architectural guide
+```
 
-## Setup
+## 🛠️ Getting Started
 
-### 1. Install MicroPython on ESP32
-
-Connect ESP32 via USB, then:
+### 1. Setup Environment
+Ensure you have Go 1.22+ and Node.js 20+ installed.
 
 ```bash
-# Install esptool
-pip install esptool
-
-# Erase flash
-esptool.py --port /dev/ttyUSB0 erase_flash
-
-# Flash MicroPython (download .bin from micropython.org)
-esptool.py --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x1000 esp32-*.bin
+make setup
 ```
 
-### 2. Install mpremote (to upload files)
+### 2. Development Mode
+Starts the Go backend (with Air hot-reload) and Vite frontend (with HMR) in parallel.
 
 ```bash
-pip install mpremote
+make dev
 ```
 
-### 3. Configure WiFi
-
-Edit `main.py` and set your WiFi credentials:
-
-```python
-WIFI_SSID = "YourNetworkName"
-WIFI_PASS = "YourPassword"
-```
-
-### 4. Upload files to ESP32
+### 3. Generate Types
+Automatically sync Go models with frontend TypeScript interfaces.
 
 ```bash
-mpremote cp main.py :main.py
-mpremote cp dns_server.py :dns_server.py
-mpremote cp dns_records.py :dns_records.py
-mpremote cp logger.py :logger.py
-mpremote cp web_server.py :web_server.py
-mpremote mkdir :static
-mpremote cp static/index.html :static/index.html
+make generate
 ```
 
-Or upload everything at once:
+### 4. Build for Production
+Creates a single, self-contained binary with the frontend embedded.
 
 ```bash
-mpremote cp -r . :
+make build-prod
 ```
 
-### 5. Reset ESP32
+## 🐳 Docker
+
+Run the entire stack in containers:
 
 ```bash
-mpremote reset
+# Development (with hot-reload)
+make docker-up-dev
+
+# Production
+make docker-up
 ```
 
-## Configure Your Router
+## 📝 Configuration
+Copy `.env.example` to `.env` and adjust settings as needed.
 
-Set your router's DNS server to the ESP32's IP address:
+- `DNS_PORT`: Port to listen for DNS queries (default: 53)
+- `HTTP_PORT`: Port for the API and Dashboard (default: 8080)
+- `UPSTREAM_DNS`: Upstream server for non-blocked queries (default: 1.1.1.1:53)
 
-1. Find ESP32's IP in serial output (or check router DHCP client list)
-2. In your router admin panel, set **DHCP DNS Server** → ESP32 IP
-3. All devices on your WiFi will now use this DNS server
-
-## Dashboard
-
-Open `http://<esp32-ip>` in your browser:
-
-- **Live Logs** tab — see every DNS query in real-time
-- **Custom Records** — add local hostnames (e.g. `nas.local → 192.168.1.50`)
-- **Blocklist** — add/remove domains to block
-
-## Testing on Linux (Before ESP32)
-
-Run the DNS server locally to test:
-
-```bash
-# Requires Python 3
-pip install -r requirements.txt
-python test_local.py
-```
-
-## Notes
-
-- ESP32 has limited RAM (~200KB free). The log buffer holds 200 entries.
-- Blocklist + custom records are persisted in flash (JSON files).
-- For 1000+ blocklist entries, load them from a file at boot.
-- ESP32 must be powered 24/7 if it's your primary DNS server.
-# home_network_DNS_management_system
+---
+*Built with ❤️ for home networks.*

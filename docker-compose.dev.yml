@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  dns-server:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: dev
+    image: dns-server:dev
+    container_name: dns-server-dev
+    network_mode: host
+    environment:
+      - DNS_PORT=5353
+      - HTTP_PORT=8080
+      - DB_PATH=/app/data/dns.db
+      - STATIC_DIR=/app/static
+    volumes:
+      - ./backend:/app
+      - dns-data:/app/data
+    command: air -c .air.toml
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend/apps/web-app:/app
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host
+
+volumes:
+  dns-data:

@@ -1,47 +1,33 @@
 # Go
-bin/
-data/
+backend/bin/
+backend/tmp/
+backend/static/
+backend/docs/
 *.db
 *.db-shm
 *.db-wal
-go.sum
-server/go.sum
-server/vendor/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
 
-# Web / Node.js
-web/node_modules/
-web/dist/
-web/build/
-web/.env
-web/.env.local
-web/.env.*.local
-web/npm-debug.log*
-web/yarn-debug.log*
-web/yarn-error.log*
+# Frontend
+frontend/apps/web-app/node_modules/
+frontend/apps/web-app/dist/
 
-# Rust
-firmware/target/
-firmware/**/*.rs.bk
-firmware/Cargo.lock
+# Builds
+bin/
+dist/
+build/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Environment
+.env
+.env.local
+
+# Agent local notes (shared/ stays committed)
+.agents/local/
 
 # OS
 .DS_Store
 Thumbs.db
-ehthumbs.db
-Desktop.ini
 
-# Text editor temporary files
-*.tmp
-*.bak
+# Editor
+.idea/
+.vscode/
+*.swp

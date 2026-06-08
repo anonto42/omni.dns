@@ -1,126 +1,123 @@
-.PHONY: help build run test clean web web-dev fmt vet lint \
-        docker-build docker-run docker-compose-up docker-compose-down \
-        firmware-build firmware-flash all bench test-cover profile-cpu profile-mem
+# ─── Metadata ──────────────────────────────────────────────────────────
+SHELL := /bin/bash
+BACKEND  := backend
+FRONTEND := frontend/apps/web-app
 
-# ─── Help ───────────────────────────────────────────────────────────────
+# Colors for output
+GREEN  := $(shell tput -Txterm setaf 2)
+YELLOW := $(shell tput -Txterm setaf 3)
+CYAN   := $(shell tput -Txterm setaf 6)
+RESET  := $(shell tput -Txterm sgr0)
+
+.PHONY: help
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-24s$(RESET) %s\n", $$1, $$2}'
 
-# ─── Go Server ──────────────────────────────────────────────────────────
-build: ## Build Go binary → bin/dns-server
-	cd server && go build -o ../bin/dns-server ./cmd/dns-server
+# ── Development ────────────────────────────────────────────────────────────────
+.PHONY: dev
+dev: ## Run backend (Air) + frontend (Vite) in parallel
+	@echo "$(YELLOW)Starting dev mode...$(RESET)"
+	@$(MAKE) -j2 dev-backend dev-frontend
 
-run: ## Run Go server (sudo for port 53)
-	cd server && sudo go run ./cmd/dns-server
+.PHONY: dev-backend
+dev-backend: ## Run backend with Air hot-reload
+	@echo "$(GREEN)Starting backend (Air)...$(RESET)"
+	cd $(BACKEND) && air
 
-run-dev: ## Run Go server with dev flags (no root needed on high ports)
-	cd server && go run ./cmd/dns-server --dns-port 5353 --http-port 8080
+.PHONY: dev-frontend
+dev-frontend: ## Run frontend with Vite HMR
+	@echo "$(GREEN)Starting frontend (Vite)...$(RESET)"
+	cd $(FRONTEND) && npm run dev
 
-fmt: ## Format Go code
-	cd server && go fmt ./...
+# ── Build ──────────────────────────────────────────────────────────────────────
+.PHONY: build
+build: build-backend build-frontend ## Build all production artifacts
 
-vet: ## Run Go vet
-	cd server && go vet ./...
+.PHONY: build-backend
+build-backend: ## Build Go binary (dev, no embed)
+	cd $(BACKEND) && go build -o bin/dns-server ./cmd/dns-server
 
-lint: ## Run golangci-lint (requires golangci-lint installed)
-	cd server && golangci-lint run ./... --timeout=5m
+.PHONY: build-frontend
+build-frontend: ## Build React production bundle
+	cd $(FRONTEND) && npm run build
 
-lint-ci: ## Run lint with CI-friendly output
-	cd server && golangci-lint run ./... --out-format=github-actions --timeout=5m
+.PHONY: build-prod
+build-prod: ## Build single binary with embedded frontend
+	@echo "$(YELLOW)Building frontend...$(RESET)"
+	cd $(FRONTEND) && npm run build
+	@echo "$(YELLOW)Copying dist to $(BACKEND)/static...$(RESET)"
+	rm -rf $(BACKEND)/static
+	cp -r $(FRONTEND)/dist $(BACKEND)/static
+	@echo "$(YELLOW)Compiling Go binary with embedded frontend...$(RESET)"
+	cd $(BACKEND) && go build -tags embed -o bin/dns-server ./cmd/dns-server
+	@echo "$(GREEN)Build complete: $(BACKEND)/bin/dns-server$(RESET)"
 
-test: ## Run Go tests
-	cd server && go test ./... -v
+# ── Code Generation ────────────────────────────────────────────────────────────
+.PHONY: generate
+generate: ## Generate TypeScript types from Go API (swag → openapi → api-types.ts)
+	@echo "$(YELLOW)Generating Swagger docs...$(RESET)"
+	cd $(BACKEND) && $(shell go env GOPATH)/bin/swag init \
+		-g cmd/dns-server/main.go -o ./docs --parseInternal
+	@echo "$(YELLOW)Converting to OpenAPI 3...$(RESET)"
+	cd $(BACKEND)/docs && npx -y swagger2openapi swagger.json --outfile openapi.json
+	@echo "$(YELLOW)Generating TypeScript types...$(RESET)"
+	npx -y openapi-typescript $(BACKEND)/docs/openapi.json \
+		-o $(FRONTEND)/src/features/api-types.ts
+	@echo "$(GREEN)Type generation complete.$(RESET)"
 
-test-cover: ## Run tests with coverage report
-	cd server && go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
-	cd server && go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: server/coverage.html"
+# ── Testing ────────────────────────────────────────────────────────────────────
+.PHONY: test
+test: test-backend test-frontend ## Run all tests
 
-test-short: ## Run tests without -race for speed
-	cd server && go test ./... -short
+.PHONY: test-backend
+test-backend: ## Run Go tests
+	cd $(BACKEND) && go test ./... -v
 
-bench: ## Run Go benchmarks
-	cd server && go test ./... -bench=. -benchmem -run=^$$ | tee bench.txt
+.PHONY: test-frontend
+test-frontend: ## Run Vitest
+	cd $(FRONTEND) && npm run test
 
-profile-cpu: ## CPU profile (30s)
-	cd server && go test ./... -cpuprofile=cpu.prof -bench=. -benchtime=30s -run=^$$
-	cd server && go tool pprof -top cpu.prof | head -30
+# ── Linting ────────────────────────────────────────────────────────────────────
+.PHONY: lint
+lint: lint-backend lint-frontend ## Run all linters
 
-profile-mem: ## Memory profile
-	cd server && go test ./... -memprofile=mem.prof -bench=. -benchmem -run=^$$
-	cd server && go tool pprof -top mem.prof | head -30
+.PHONY: lint-backend
+lint-backend: ## Run golangci-lint
+	cd $(BACKEND) && golangci-lint run ./...
 
-tidy: ## Tidy Go module
-	cd server && go mod tidy
+.PHONY: lint-frontend
+lint-frontend: ## Run ESLint
+	cd $(FRONTEND) && npm run lint
 
-clean: ## Remove build artifacts
-	rm -rf bin/ data/
-
-# ─── React Frontend ─────────────────────────────────────────────────────
-web: ## Build React for production → web/dist
-	cd web && npm run build
-
-web-dev: ## Start Vite dev server (proxies /api to :8080)
-	cd web && npm run dev
-
-web-install: ## Install/update npm dependencies
-	cd web && npm install
-
-# ─── Docker ──────────────────────────────────────────────────────────────
-docker-build: ## Build Docker image
-	docker build -t dns-server:latest .
-
-docker-run: ## Run container (host networking, needs port 53)
-	docker run --rm --name dns-server \
-		--cap-add=NET_BIND_SERVICE \
-		--network host \
-		-v dns-data:/app/data \
-		dns-server:latest
-
-docker-compose-up: ## Start via Docker Compose
+# ── Docker ─────────────────────────────────────────────────────────────────────
+.PHONY: docker-up
+docker-up: ## Start production stack
 	docker compose up -d --build
 
-docker-compose-down: ## Stop Docker Compose
+.PHONY: docker-up-dev
+docker-up-dev: ## Start dev stack with hot-reload volumes
+	docker compose -f docker-compose.dev.yml up --build
+
+.PHONY: docker-down
+docker-down: ## Stop all containers
 	docker compose down
 
-docker-compose-logs: ## Tail container logs
-	docker compose logs -f
+# ── Setup ──────────────────────────────────────────────────────────────────────
+.PHONY: setup
+setup: ## Install all dev tools and dependencies
+	@echo "$(YELLOW)Installing Go tools...$(RESET)"
+	go install github.com/air-verse/air@latest
+	go install github.com/swaggo/swag/cmd/swag@latest
+	@echo "$(YELLOW)Installing frontend dependencies...$(RESET)"
+	cd $(FRONTEND) && npm install
+	@echo "$(YELLOW)Installing pre-commit...$(RESET)"
+	@command -v pip >/dev/null 2>&1 && pip install pre-commit --break-system-packages 2>/dev/null || echo "Please install pre-commit manually: https://pre-commit.com/#install"
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || echo "pre-commit not found, skipping install"
+	@echo "$(GREEN)Setup complete.$(RESET)"
 
-docker-run-alt: ## Run on alternate ports (no root)
-	docker run --rm --name dns-server \
-		-p 5353:5353/udp -p 5353:5353 -p 8080:8080 \
-		-v dns-data:/app/data \
-		dns-server:latest \
-		--dns-port 5353 --http-port 8080 --static web/dist
-
-# ─── ESP32 Firmware ─────────────────────────────────────────────────────
-firmware-build: ## Build Rust firmware
-	cd firmware && cargo build
-
-firmware-flash: ## Flash firmware to ESP32
-	cd firmware && espflash flash
-
-# ─── Quality ─────────────────────────────────────────────────────────────
-pre-commit-install: ## Install pre-commit hooks
-	@command -v pre-commit >/dev/null 2>&1 || (echo "Install pre-commit: pip install pre-commit" && exit 1)
-	pre-commit install
-
-pre-commit-run: ## Run pre-commit on all files
-	pre-commit run --all-files
-
-pre-commit-update: ## Update pre-commit hook versions
-	pre-commit autoupdate
-
-# ─── All-in-one ─────────────────────────────────────────────────────────
-all: build web ## Build Go binary + React frontend
-
-start: build run ## Build and run server
-
-dev: web-dev ## Start frontend dev server (run server separately)
-
-# ─── Docker Compose override ────────────────────────────────────────────
-# Use:  make docker-compose-up DOCKER_PORT=5353
-DOCKER_PORT ?= 53
-docker-compose-up-alt:
-	DOCKER_PORT=$(DOCKER_PORT) docker compose -f docker-compose.yml up -d --build
+# ── Cleanup ────────────────────────────────────────────────────────────────────
+.PHONY: clean
+clean: ## Remove all build artifacts
+	rm -rf $(BACKEND)/bin $(BACKEND)/tmp $(BACKEND)/static $(BACKEND)/docs
+	rm -rf $(FRONTEND)/dist

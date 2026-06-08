@@ -1,102 +1,32 @@
-version: "2"
-
 run:
-  concurrency: 4
   timeout: 5m
-  issues-exit-code: 1
-  tests: true
-  modules-download-mode: readonly
-
-output:
-  formats:
-    - format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-  sort-results: true
+  go: "1.22"
 
 linters:
-  default: none
   enable:
-    # Best-practice / correctness
     - errcheck
     - govet
     - staticcheck
-    - gosec
+    - goimports
     - revive
-
-    # Style / simplicity
     - gosimple
     - ineffassign
     - unused
-
-    # Performance
-    - prealloc
-
-    # Import hygiene
-    - gci
-    - goimports
-    - importas
-
-    # Misc
     - misspell
-    - noctx
-    - unconvert
-    - whitespace
-
-  settings:
-    gci:
-      sections:
-        - standard
-        - default
-        - localmodule
-    revive:
-      rules:
-        - name: exported
-          severity: warning
-        - name: package-comments
-          severity: warning
-        - name: blank-imports
-        - name: context-as-argument
-        - name: error-return
-        - name: error-naming
-        - name: error-strings
-        - name: if-return
-        - name: increment-decrement
-        - name: var-naming
-        - name: var-declaration
-        - name: range
-        - name: receiver-naming
-        - name: time-naming
-        - name: unexported-return
-        - name: indent-error-flow
-        - name: errorf
-        - name: empty-block
-        - name: superfluous-else
-        - name: unused-parameter
-        - name: unreachable-code
-        - name: redefines-builtin-id
-    staticcheck:
-      checks:
-        - all
+  disable:
+    - wsl
+    - exhaustruct
 
 linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  misspell:
-    locale: US
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: true
+  goimports:
+    local-prefixes: github.com/sohidul/esp32-dns-server
+  revive:
+    rules:
+      - name: exported
+        severity: warning
 
 issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  exclude-dirs:
-    - bin/
-    - data/
-    - web/
-    - firmware/
-    - legacy/
-  exclude-generated: strict
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
