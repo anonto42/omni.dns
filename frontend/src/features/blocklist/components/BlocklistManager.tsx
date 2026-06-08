@@ -7,20 +7,22 @@ export default function BlocklistManager() {
   const [wildcard, setWildcard] = useState(false)
 
   useEffect(() => {
-    getBlocklist().then(setList)
+    getBlocklist().then((data) => setList(data || []))
   }, [])
 
   const handleAdd = async () => {
     if (!domain) return
     await addToBlocklist(domain, wildcard)
-    setList(await getBlocklist())
+    const data = await getBlocklist()
+    setList(data || [])
     setDomain('')
     setWildcard(false)
   }
 
   const handleDelete = async (d: string) => {
     await removeFromBlocklist(d)
-    setList(await getBlocklist())
+    const data = await getBlocklist()
+    setList(data || [])
   }
 
   return (
@@ -53,7 +55,7 @@ export default function BlocklistManager() {
         </label>
       </div>
 
-      {list.length === 0 ? (
+      {(!list || list.length === 0) ? (
         <p className="text-gray-600 text-sm text-center py-6">No blocked domains.</p>
       ) : (
         <div className="space-y-1">
