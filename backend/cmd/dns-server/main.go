@@ -73,6 +73,10 @@ func main() {
 		slog.Error("open database", "error", err)
 		os.Exit(1)
 	}
+	// Seed admin user
+	if err := database.InitAdmin("anontom90@gmail.com", "admin@1234"); err != nil {
+		slog.Error("init admin", "error", err)
+	}
 	defer database.Close()
 
 	dnsCfg := &dns.Config{

@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sohidul/dns-server/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type DB struct {
@@ -22,6 +23,11 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Create users table
+	_, err = conn.Exec("CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT)")
+	if err != nil {
+		return nil, err
+	}
 	db := &DB{
 		conn:    conn,
 		logChan: make(chan models.QueryLog, 1000),
@@ -32,9 +38,23 @@ func Open(path string) (*DB, error) {
 
 func (db *DB) Close() error { return db.conn.Close() }
 
-func (db *DB) PruneLogs(t time.Time) {}
+func (db *DB) InitAdmin(email, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = db.conn.Exec("INSERT OR IGNORE INTO users (email, password) VALUES (?, ?)", email, string(hashedPassword))
+	return err
+}
 
-func (db *DB) GetCustomRecord(domain string) string { return "" }
+func (db *DB) VerifyUser(email, password string) bool {
+	var hashedPassword string
+	err := db.conn.QueryRow("SELECT password FROM users WHERE email = ?", email).Scan(&hashedPassword)
+	if err != nil {
+		return false
+	}
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) == nil
+}
 
 func (db *DB) LogQuery(domain, clientIP string, action models.Action) {
 	db.logChan <- models.QueryLog{
@@ -102,6 +122,7 @@ func (db *DB) Flush() {
 	}
 }
 
+func (db *DB) PruneLogs(t time.Time) {}
 func (db *DB) GetStats() models.Stats                      { return models.Stats{} }
 func (db *DB) GetLogs(limit int) []models.QueryLog         { return nil }
 func (db *DB) ClearLogs()                                  {}
@@ -112,3 +133,4 @@ func (db *DB) GetBlocklist() []models.BlockedDomain        { return nil }
 func (db *DB) AddToBlocklist(domain string, wildcard bool) {}
 func (db *DB) RemoveFromBlocklist(domain string)           {}
 func (db *DB) IsBlocked(domain string) bool                { return false }
+func (db *DB) GetCustomRecord(domain string) string        { return "" }
