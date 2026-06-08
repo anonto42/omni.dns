@@ -12,6 +12,7 @@ import (
 type Upstream struct {
 	Addr    string
 	Timeout time.Duration
+	TLS     bool
 }
 
 type PooledForwarder struct {
@@ -50,7 +51,11 @@ func (f *PooledForwarder) Forward(req *dns.Msg) (*dns.Msg, error) {
 		}
 
 		up := f.upstreams[i]
-		client := &dns.Client{Net: "udp", Timeout: up.Timeout}
+		netType := "udp"
+		if up.TLS {
+			netType = "tcp-tls"
+		}
+		client := &dns.Client{Net: netType, Timeout: up.Timeout}
 		resp, _, err := client.Exchange(req, up.Addr)
 		if err == nil {
 			return resp, nil
