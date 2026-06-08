@@ -3,32 +3,33 @@
 **Status:** Finalized
 
 ### Objective
-Compare local self-hosted DNS servers with premium cloud-based DNS services to identify feature gaps and opportunities for our project's roadmap.
+Compare local self-hosted DNS servers with premium cloud-based DNS services to identify feature gaps and track the project's implementation status.
 
-### Market/Context Analysis
-The DNS market is currently bifurcated:
-- **Local (Self-Hosted):** Privacy-focused, free, requires hardware management.
-- **Cloud (Premium/Paid):** Feature-rich, mobile/remote protection, zero-maintenance.
+---
 
-### Technical Exploration: Feature Comparison
+### Final Feature Audit: Implementation Status
 
-| Key Feature Evaluated | Pi-hole | AdGuard Home | Technitium | Unbound | NextDNS | Control D |
-|---|---|---|---|---|---|---|
-| Ad & Tracker Blocking | 1.0 | 1.0 | 0.5 | 0.0 | 1.0 | 1.0 |
-| Web GUI Dashboard | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | 1.0 |
-| DoH/DoT Encryption | 0.5 | 1.0 | 1.0 | 0.5 | 1.0 | 1.0 |
-| Parental Controls | 0.0 | 1.0 | 0.0 | 0.0 | 1.0 | 1.0 |
-| LAN Routing (Zones) | 0.5 | 0.5 | 1.0 | 0.5 | 0.0 | 1.0 |
-| DHCP Server | 1.0 | 1.0 | 1.0 | 0.0 | 0.0 | 0.0 |
-| Remote/Mobile Protection | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 1.0 |
-| Geo-Proxying | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
-| Maintenance-Free | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 1.0 |
-| **⭐ TOTAL SCORE** | **4.0** | **5.5** | **5.5** | **1.0** | **7.0** | **8.0** |
+| Category | Feature | Status | Implementation Notes |
+| :--- | :--- | :--- | :--- |
+| **Blocking** | Ad & Tracker Blocking | ✅ Completed | Fully operational. |
+| **Encryption** | Outbound DoT | ✅ Completed | Implemented TLS forwarding in `forwarder.go`. |
+| **Networking** | LAN Routing / Zone Files | ✅ Completed | Fully operational. |
+| **Management** | Web GUI Dashboard | ✅ Completed | Fully operational. |
+| **Persistence**| Batch Log Writer | ✅ Completed | Optimized SQLite logging implemented. |
+| **Memory** | In-memory Maps | ✅ Completed | `sync.Map` for performance. |
+| **Packaging** | Single-Binary Embed | ✅ Completed | `embed` tag support added. |
 
-### Key Insights
-- Cloud services leverage "anywhere" protection via native device integration.
-- Self-hosted services provide superior LAN control and privacy.
-- There is a market gap for a self-hosted tool that bridges the "local control" of Pi-hole/AdGuard with the "remote accessibility" offered by cloud services.
+---
 
+### Future Implementations (Next Versions)
+
+| Category | Feature | Status | Implementation Notes |
+| :--- | :--- | :--- | :--- |
+| **Networking** | DHCP Server | ❌ Not Implemented | Required extensive network configuration beyond DNS-only core. |
+| **Remote** | Out-of-Home / Cellular Protection | ❌ Not Implemented | Requires a hybrid "remote agent" or full VPN infrastructure. |
+| **Networking** | Traffic Geo-Proxying / Spoofing | ❌ Not Implemented | Requires global proxy server infrastructure (Impossible for local-only). |
+| **Cloud** | Zero Hardware / Maintenance | ❌ Not Implemented | Requires cloud-side hosting/management (Impossible for local-only). |
+
+---
 ### Conclusion & Next Steps
-This analysis will inform our feature prioritization. We should focus on narrowing the gap between local self-hosted stability and remote access capabilities.
+The core local DNS functionality is now complete. Future iterations will focus on testing the stability of these features and potentially exploring hybrid architectures to bridge the gap with premium cloud features.
