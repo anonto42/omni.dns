@@ -47,5 +47,10 @@ make docker-up-dev  # hot-reload Docker stack
 3. `api-types.ts` is generated — never hand-edit it
 4. All DNS hot-path code must be non-blocking — no SQLite calls in `dns/handler.go`
 5. `docs/` is gitignored — generated on every `make generate`
+6. After every `git commit`, immediately run `make lint` and `make test`. If checks fail, resolve all issues before proceeding to `git push`.
+7. **Commit Messages:** All commits MUST contain a clear, concise summary of "why" the change was made, providing sufficient context.
+8. **AI Sign-off:** Every AI-generated commit MUST be signed off using the current Git user: `Signed-off-by: Md Sohidul Islam Ananto <anontom90@gmail.com>`.
+
+## Next: read `caveman.md` for current state
 
 ## Next: read `caveman.md` for current state
