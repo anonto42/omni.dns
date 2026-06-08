@@ -1,83 +1,68 @@
-# 🌐 DNS Server & Dashboard
+# NetShield DNS
 
-A high-performance, ad-blocking DNS server and management dashboard built with Go and React. Designed for speed, reliability, and ease of use.
+**Enterprise-Grade Self-Hosted DNS Server & Dashboard.**
 
-## 🚀 Features
+NetShield DNS is a modern, performance-oriented DNS server designed for privacy, local network routing, and advanced ad-blocking. It combines a high-performance Go backend with a professional, Stitch Design-inspired React dashboard to give you full visibility and control over your network traffic.
 
-- **DNS Engine:** Standards-compliant implementation using `miekg/dns`.
-- **Ad Blocking:** Block trackers and ad domains with wildcard support.
-- **Custom Records:** Easily map hostnames to local IPs (e.g., `nas.local` → `192.168.1.50`).
-- **In-Memory Speed:** Blocklists and custom records are cached in memory for near-zero latency.
-- **Batch Logging:** High-throughput logging via buffered channel flushes to SQLite.
-- **Modern Dashboard:** Real-time log table, stats cards, and easy record management.
-- **Single Binary:** Embedded frontend assets for simple deployment.
+---
 
-## 🏗️ Architecture
+## 🚀 Key Features
 
-- **Backend:** Go 1.22, SQLite (WAL mode), `chi` router, `miekg/dns`.
-- **Frontend:** React 18, Vite, Tailwind CSS, TypeScript.
-- **Orchestration:** Monorepo structure managed by `go.work` and a central `Makefile`.
+*   **⚡ High-Performance DNS:** Powered by `miekg/dns` for reliable, low-latency resolution.
+*   **🛡️ Ad & Tracker Blocking:** In-memory, thread-safe blocklist management for instant resolution dropping.
+*   **🔐 Encrypted Upstream:** Outbound DNS-over-TLS (DoT) support for secure communication with resolvers.
+*   **🏠 LAN Routing:** Authoritative local domain hosting and custom A/AAAA/CNAME record management.
+*   **📊 Enterprise Dashboard:** Professional monitoring, real-time query logging, and system health metrics via a modern React interface.
+*   **📦 Production-Ready:** Single-binary deployment with embedded frontend assets.
+*   **🚀 Persistent Service:** Designed to auto-start on boot as a background service on Linux, Windows, or macOS.
 
-## 📂 Project Structure
+---
 
-```text
-.
-├── backend/          # Go DNS & API Service
-├── frontend/         # React Dashboard Application
-├── .agents/          # AI Agent workspace for documentation & history
-├── go.work           # Go workspace configuration
-├── Makefile          # Central command hub
-└── BLUEPRINT.md      # Detailed architectural guide
-```
+## 🏗️ Architecture Overview
+
+NetShield DNS follows a monorepo structure:
+- **`backend/`**: Go application managing DNS resolution, API endpoints, SQLite persistence, and stats.
+- **`frontend/`**: React application using TailwindCSS and the Stitch Design system for the dashboard UI.
+- **`docs/`**: Centralized architectural decisions, RFCs, and research.
+
+---
 
 ## 🛠️ Getting Started
 
-### 1. Setup Environment
-Ensure you have Go 1.22+ and Node.js 20+ installed.
+### Prerequisites
+*   Docker & Docker Compose
+*   Make
 
+### Development Workflow
+Start the full development stack (Backend + Frontend):
 ```bash
-make setup
+make docker-up-dev
 ```
+*The dashboard will be available at `http://localhost:5173`.*
 
-### 2. Development Mode
-Starts the Go backend (with Air hot-reload) and Vite frontend (with HMR) in parallel.
-
-```bash
-make dev
-```
-
-### 3. Generate Types
-Automatically sync Go models with frontend TypeScript interfaces.
-
-```bash
-make generate
-```
-
-### 4. Build for Production
-Creates a single, self-contained binary with the frontend embedded.
-
+### Production Build
+To generate the production-ready single binary:
 ```bash
 make build-prod
 ```
 
-## 🐳 Docker
+---
 
-Run the entire stack in containers:
+## ⚙️ Deployment as a System Service
 
-```bash
-# Development (with hot-reload)
-make docker-up-dev
-
-# Production
-make docker-up
-```
-
-## 📝 Configuration
-Copy `.env.example` to `.env` and adjust settings as needed.
-
-- `DNS_PORT`: Port to listen for DNS queries (default: 53)
-- `HTTP_PORT`: Port for the API and Dashboard (default: 8080)
-- `UPSTREAM_DNS`: Upstream server for non-blocked queries (default: 1.1.1.1:53)
+To enable auto-start on Linux/Raspberry Pi:
+1.  Copy `docs/assets/dns-server.service` to `/etc/systemd/system/`.
+2.  Adjust `User`, `Group`, and `ExecStart` paths.
+3.  Run:
+    ```bash
+    sudo systemctl enable dns-server
+    sudo systemctl start dns-server
+    ```
 
 ---
-*Built with ❤️ for home networks.*
+
+## 📄 License & Contributing
+
+This project is licensed under the **MIT License**. See the `LICENSE` file for details.
+
+We welcome contributions! Please check the `CONTRIBUTING.md` file for workflows, verification standards, and architectural guidelines before submitting pull requests.
