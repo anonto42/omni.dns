@@ -1,26 +1,45 @@
 package dns
 
 import (
+	"container/list"
 	"sync"
 	"time"
+)
+
+const (
+	defaultNegTTL  = 60
+	evictInterval  = 30 * time.Second
+	maxEvictPerRun = 100
 )
 
 type cacheEntry struct {
 	IP        string
 	TTL       uint32
 	ExpiresAt time.Time
+	NXDOMAIN  bool
 }
 
 type Cache struct {
-	mu    sync.RWMutex
-	items map[string]*cacheEntry
-	max   int
+	mu        sync.RWMutex
+	items     map[string]*list.Element
+	order     *list.List
+	max       int
+	hits      int64
+	misses    int64
+	negTTL    uint32
+}
+
+type kv struct {
+	key   string
+	value *cacheEntry
 }
 
 func NewCache(max int) *Cache {
 	c := &Cache{
-		items: make(map[string]*cacheEntry),
-		max:   max,
+		items:  make(map[string]*list.Element),
+		order:  list.New(),
+		max:    max,
+		negTTL: defaultNegTTL,
 	}
 	go c.evictLoop()
 	return c
@@ -28,16 +47,31 @@ func NewCache(max int) *Cache {
 
 func (c *Cache) Get(domain string) *cacheEntry {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, ok := c.items[domain]
+	elem, ok := c.items[domain]
 	if !ok {
+		c.mu.RUnlock()
 		return nil
 	}
-	if time.Now().After(entry.ExpiresAt) {
-		delete(c.items, domain)
+
+	entry := elem.Value.(*kv).value
+	now := time.Now()
+	if now.After(entry.ExpiresAt) {
+		c.mu.RUnlock()
+		c.mu.Lock()
+		if elem, ok := c.items[domain]; ok {
+			if now.After(elem.Value.(*kv).value.ExpiresAt) {
+				c.order.Remove(elem)
+				delete(c.items, domain)
+			}
+		}
+		c.misses++
+		c.mu.Unlock()
 		return nil
 	}
+
+	c.order.MoveToFront(elem)
+	c.hits++
+	c.mu.RUnlock()
 	return entry
 }
 
@@ -45,34 +79,89 @@ func (c *Cache) Set(domain, ip string, ttl uint32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if len(c.items) >= c.max {
-		for k := range c.items {
-			delete(c.items, k)
-			break
+	if elem, ok := c.items[domain]; ok {
+		c.order.MoveToFront(elem)
+		entry := elem.Value.(*kv).value
+		entry.IP = ip
+		entry.TTL = ttl
+		entry.ExpiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
+		entry.NXDOMAIN = false
+		return
+	}
+
+	if c.order.Len() >= c.max {
+		back := c.order.Back()
+		if back != nil {
+			c.order.Remove(back)
+			delete(c.items, back.Value.(*kv).key)
 		}
 	}
 
-	c.items[domain] = &cacheEntry{
+	entry := &cacheEntry{
 		IP:        ip,
 		TTL:       ttl,
 		ExpiresAt: time.Now().Add(time.Duration(ttl) * time.Second),
 	}
+	elem := c.order.PushFront(&kv{key: domain, value: entry})
+	c.items[domain] = elem
+}
+
+func (c *Cache) SetNXDOMAIN(domain string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.items[domain]; ok {
+		return
+	}
+
+	if c.order.Len() >= c.max {
+		back := c.order.Back()
+		if back != nil {
+			c.order.Remove(back)
+			delete(c.items, back.Value.(*kv).key)
+		}
+	}
+
+	entry := &cacheEntry{
+		NXDOMAIN:  true,
+		ExpiresAt: time.Now().Add(time.Duration(c.negTTL) * time.Second),
+	}
+	elem := c.order.PushFront(&kv{key: domain, value: entry})
+	c.items[domain] = elem
 }
 
 func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.items)
+	return c.order.Len()
+}
+
+func (c *Cache) Hits() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.hits
+}
+
+func (c *Cache) Misses() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.misses
 }
 
 func (c *Cache) evictLoop() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(evictInterval)
 	for range ticker.C {
 		c.mu.Lock()
 		now := time.Now()
+		evicted := 0
 		for k, v := range c.items {
-			if now.After(v.ExpiresAt) {
+			if now.After(v.Value.(*kv).value.ExpiresAt) {
+				c.order.Remove(v)
 				delete(c.items, k)
+				evicted++
+				if evicted >= maxEvictPerRun {
+					break
+				}
 			}
 		}
 		c.mu.Unlock()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,67 +13,123 @@ import (
 	"github.com/sohidul/esp32-dns-server/internal/models"
 )
 
-type Handler struct {
-	db      *db.DB
-	cache   *Cache
-	started time.Time
+const (
+	udpBufferSize  = 1500
+	dnsHeaderSize  = 12
+	blockedIPResp  = "0.0.0.0"
+)
+
+var blockedIPBytes = []byte{0, 0, 0, 0}
+
+type Config struct {
+	BlockNXDOMAIN bool
+	Upstreams     []Upstream
+	CacheSize     int
 }
 
-func NewHandler(database *db.DB) *Handler {
+type Handler struct {
+	db        *db.DB
+	cache     *Cache
+	forwarder *PooledForwarder
+	started   time.Time
+	blockNX   bool
+}
+
+func NewHandler(database *db.DB, cfg *Config) *Handler {
+	if cfg == nil {
+		cfg = &Config{
+			CacheSize: 1000,
+			Upstreams: []Upstream{{Addr: "1.1.1.1:53", Timeout: 3 * time.Second}},
+		}
+	}
+
 	return &Handler{
-		db:      database,
-		cache:   NewCache(1000),
-		started: time.Now(),
+		db:        database,
+		cache:     NewCache(cfg.CacheSize),
+		forwarder: NewPooledForwarder(cfg.Upstreams),
+		started:   time.Now(),
+		blockNX:   cfg.BlockNXDOMAIN,
 	}
 }
 
-func (h *Handler) Handle(conn *net.UDPConn, client *net.UDPAddr, data []byte) {
+func (h *Handler) HandleUDP(conn *net.UDPConn, client *net.UDPAddr, data []byte) {
+	resp, _ := h.handle(data, client.IP.String())
+	if resp == nil {
+		return
+	}
+	conn.WriteToUDP(resp, client)
+}
+
+func (h *Handler) HandleTCP(conn net.Conn, data []byte, clientIP string) {
+	resp, _ := h.handle(data, clientIP)
+	if resp == nil {
+		return
+	}
+
+	tcpResp := make([]byte, 2+len(resp))
+	tcpResp[0] = byte(len(resp) >> 8)
+	tcpResp[1] = byte(len(resp))
+	copy(tcpResp[2:], resp)
+	conn.Write(tcpResp)
+}
+
+func (h *Handler) handle(data []byte, clientIP string) ([]byte, models.Action) {
 	domain, qtype := parseQuery(data)
 	if domain == "" {
-		return
+		return nil, ""
 	}
 
-	log.Printf("Query: %s (type %d) from %s", domain, qtype, client.IP)
+	log.Printf("Query: %s (type %d) from %s", domain, qtype, clientIP)
 
 	if h.db.IsBlocked(domain) {
-		h.db.LogQuery(domain, client.IP.String(), "blocked")
-		respond(conn, client, data, domain, "0.0.0.0", 60, 0)
-		return
+		h.db.LogQuery(domain, clientIP, models.ActionBlocked)
+		if h.blockNX {
+			return buildNXResponse(data), models.ActionBlocked
+		}
+		return buildAResponse(data, blockedIPResp, 60, 0), models.ActionBlocked
 	}
 
 	if ip := h.db.GetCustomRecord(domain); ip != "" {
-		h.db.LogQuery(domain, client.IP.String(), "custom")
-		respond(conn, client, data, domain, ip, 300, 0)
-		return
+		h.db.LogQuery(domain, clientIP, models.ActionCustom)
+		return buildAResponse(data, ip, 300, 0), models.ActionCustom
 	}
 
 	if cached := h.cache.Get(domain); cached != nil {
-		h.db.LogQuery(domain, client.IP.String(), "cached")
-		respond(conn, client, data, domain, cached.IP, cached.TTL, 0)
-		return
+		h.db.LogQuery(domain, clientIP, models.ActionCached)
+		if cached.NXDOMAIN {
+			return buildNXResponse(data), models.ActionCached
+		}
+		return buildAResponse(data, cached.IP, cached.TTL, 0), models.ActionCached
 	}
 
-	response, err := forward(data)
+	response, err := h.forwarder.Forward(data)
 	if err != nil {
-		h.db.LogQuery(domain, client.IP.String(), "error")
-		respond(conn, client, data, domain, "", 0, 2)
-		return
+		h.db.LogQuery(domain, clientIP, models.ActionError)
+		return buildNXResponse(data), models.ActionError
 	}
 
-	if ip := extractAnswerIP(response); ip != "" {
-		h.cache.Set(domain, ip, 300)
+	if len(response) >= dnsHeaderSize {
+		rcode := response[3] & 0x0F
+		if rcode == 3 {
+			h.cache.SetNXDOMAIN(domain)
+		}
 	}
 
-	h.db.LogQuery(domain, client.IP.String(), "forwarded")
-	conn.WriteToUDP(response, client)
+	if ip := ExtractAnswerIP(response); ip != "" {
+		ttl := ExtractTTL(response)
+		h.cache.Set(domain, ip, ttl)
+	}
+
+	h.db.LogQuery(domain, clientIP, models.ActionForwarded)
+	return response, models.ActionForwarded
 }
 
 func parseQuery(data []byte) (domain string, qtype uint16) {
-	if len(data) < 12 {
+	if len(data) < dnsHeaderSize {
 		return "", 0
 	}
 	var labels []string
-	i := 12
+	i := dnsHeaderSize
 	for {
 		if i >= len(data) {
 			return "", 0
@@ -95,14 +152,24 @@ func parseQuery(data []byte) (domain string, qtype uint16) {
 	return strings.ToLower(strings.Join(labels, ".")), qtype
 }
 
-func respond(conn *net.UDPConn, client *net.UDPAddr, query []byte, domain, ip string, ttl uint32, rcode uint8) {
+func findQEnd(data []byte, start int) int {
+	i := start
+	for i < len(data) && data[i] != 0 {
+		i++
+	}
+	i++ // null terminator
+	if i+4 <= len(data) {
+		i += 4 // QTYPE + QCLASS
+	}
+	return i
+}
+
+func buildAResponse(query []byte, ip string, ttl uint32, rcode uint8) []byte {
 	resp := make([]byte, len(query)+16)
 	copy(resp, query[:2])
 
-	var flags uint16 = 0x8000
-	flags |= uint16(rcode)
+	var flags uint16 = 0x8000 | uint16(rcode)
 	binary.BigEndian.PutUint16(resp[2:4], flags)
-
 	copy(resp[4:6], query[4:6])
 
 	ancount := uint16(0)
@@ -113,69 +180,62 @@ func respond(conn *net.UDPConn, client *net.UDPAddr, query []byte, domain, ip st
 	binary.BigEndian.PutUint16(resp[8:10], 0)
 	binary.BigEndian.PutUint16(resp[10:12], 0)
 
-	// question section
-	qstart := 12
-	for resp[qstart] != 0 {
-		qstart++
-	}
-	qstart += 5 // null terminator + QTYPE + QCLASS
-	copy(resp[12:qstart], query[12:qstart])
+	qstart := findQEnd(resp, dnsHeaderSize)
+	copy(resp[dnsHeaderSize:qstart], query[dnsHeaderSize:qstart])
 
-	// answer section
 	if ip != "" {
 		off := qstart
 		resp[off] = 0xC0
 		resp[off+1] = 0x0C
-		binary.BigEndian.PutUint16(resp[off+2:off+4], 1)    // type A
-		binary.BigEndian.PutUint16(resp[off+4:off+6], 1)    // class IN
-		binary.BigEndian.PutUint32(resp[off+6:off+10], ttl) // TTL
-		binary.BigEndian.PutUint16(resp[off+10:off+12], 4)  // data length
-		parts := strings.Split(ip, ".")
-		if len(parts) == 4 {
-			for j, p := range parts {
-				resp[off+12+j] = byte(atoi(p))
+		binary.BigEndian.PutUint16(resp[off+2:off+4], 1)
+		binary.BigEndian.PutUint16(resp[off+4:off+6], 1)
+		binary.BigEndian.PutUint32(resp[off+6:off+10], ttl)
+		binary.BigEndian.PutUint16(resp[off+10:off+12], 4)
+
+		if ip == blockedIPResp {
+			copy(resp[off+12:off+16], blockedIPBytes)
+		} else {
+			parts := strings.Split(ip, ".")
+			if len(parts) == 4 {
+				for j, p := range parts {
+					n, err := strconv.Atoi(p)
+					if err == nil {
+						resp[off+12+j] = byte(n)
+					}
+				}
 			}
 		}
 		resp = resp[:off+16]
 	} else {
 		resp = resp[:qstart]
 	}
-
-	conn.WriteToUDP(resp, client)
+	return resp
 }
 
-func forward(data []byte) ([]byte, error) {
-	upstream, err := net.Dial("udp", "1.1.1.1:53")
-	if err != nil {
-		return nil, fmt.Errorf("dial upstream: %w", err)
+func buildNXResponse(query []byte) []byte {
+	resp := make([]byte, len(query))
+	copy(resp, query[:2])
+
+	var flags uint16 = 0x8000 | 0x0003
+	binary.BigEndian.PutUint16(resp[2:4], flags)
+	copy(resp[4:6], query[4:6])
+	binary.BigEndian.PutUint16(resp[6:8], 0)
+	binary.BigEndian.PutUint16(resp[8:10], 0)
+	binary.BigEndian.PutUint16(resp[10:12], 0)
+
+	qend := findQEnd(resp, dnsHeaderSize)
+	if qend > len(resp) {
+		qend = len(resp)
 	}
-	defer upstream.Close()
-
-	upstream.SetDeadline(time.Now().Add(3 * time.Second))
-
-	if _, err := upstream.Write(data); err != nil {
-		return nil, fmt.Errorf("write upstream: %w", err)
-	}
-
-	resp := make([]byte, 512)
-	n, err := upstream.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("read upstream: %w", err)
-	}
-
-	return resp[:n], nil
+	return resp[:qend]
 }
 
-func extractAnswerIP(data []byte) string {
-	if len(data) < 12 {
+func ExtractAnswerIP(data []byte) string {
+	if len(data) < dnsHeaderSize {
 		return ""
 	}
-	qend := 12
-	for data[qend] != 0 {
-		qend++
-	}
-	qend += 5
 
+	qend := findQEnd(data, dnsHeaderSize)
 	if qend+12 > len(data) {
 		return ""
 	}
@@ -192,10 +252,30 @@ func extractAnswerIP(data []byte) string {
 	return ""
 }
 
-func atoi(s string) int {
-	n := 0
-	for _, c := range s {
-		n = n*10 + int(c-'0')
+func ExtractTTL(data []byte) uint32 {
+	if len(data) < dnsHeaderSize {
+		return 300
 	}
-	return n
+
+	qend := findQEnd(data, dnsHeaderSize)
+	if qend+12 <= len(data) && data[qend] == 0xC0 && data[qend+1] == 0x0C {
+		return binary.BigEndian.Uint32(data[qend+6 : qend+10])
+	}
+	return 300
+}
+
+func (h *Handler) UptimeSeconds() float64 {
+	return time.Since(h.started).Seconds()
+}
+
+func (h *Handler) CacheSize() int {
+	return h.cache.Size()
+}
+
+func (h *Handler) CacheHits() int64 {
+	return h.cache.Hits()
+}
+
+func (h *Handler) CacheMisses() int64 {
+	return h.cache.Misses()
 }

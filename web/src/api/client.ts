@@ -4,7 +4,10 @@ export interface Status {
   queries_forwarded: number
   queries_blocked: number
   queries_custom: number
+  queries_cached: number
   cache_size: number
+  cache_hits: number
+  cache_misses: number
   uptime_seconds: number
 }
 

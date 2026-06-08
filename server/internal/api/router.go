@@ -3,10 +3,11 @@ package api
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/sohidul/esp32-dns-server/internal/db"
+	"github.com/sohidul/esp32-dns-server/internal/dns"
 )
 
-func RegisterRoutes(r chi.Router, database *db.DB) {
-	h := NewHandler(database)
+func RegisterRoutes(r chi.Router, database *db.DB, dnsHandler *dns.Handler) {
+	h := NewHandler(database, dnsHandler)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/status", h.GetStatus)

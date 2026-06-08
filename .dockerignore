@@ -1,0 +1,14 @@
+.git
+.gitignore
+.vscode
+.idea
+*.md
+bin/
+data/
+firmware/
+legacy/
+docs/
+web/node_modules/
+web/dist/
+web/.env
+firmware/target/
