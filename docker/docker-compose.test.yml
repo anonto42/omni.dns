@@ -1,0 +1,19 @@
+services:
+  backend-check:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      target: test
+    image: dns-server:test
+    volumes:
+      - ../backend:/app
+    environment:
+      - CGO_ENABLED=1
+    command: sh -c "golangci-lint run ./... && go test ./..."
+
+  frontend-check:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+    entrypoint: ["npx", "tsc", "--noEmit"]

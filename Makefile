@@ -96,22 +96,36 @@ docker-up-dev: ## Start dev stack with hot-reload volumes
 	docker compose -f docker/docker-compose.dev.yml up --build
 
 .PHONY: docker-down
-docker-down: ## Stop all containers (prod + dev)
+docker-down: ## Stop all containers (prod + dev + test)
 	docker compose -f docker/docker-compose.yml down
 	docker compose -f docker/docker-compose.dev.yml down 2>/dev/null || true
+	docker compose -f docker/docker-compose.test.yml down 2>/dev/null || true
+
+.PHONY: docker-build-test
+docker-build-test: ## Build the test image (pre-build for faster pre-commit hooks)
+	docker compose -f docker/docker-compose.test.yml build
+
+.PHONY: docker-test-backend
+docker-test-backend: ## Run Go lint + tests inside the test container
+	docker compose -f docker/docker-compose.test.yml run --rm backend-check
+
+.PHONY: docker-test-frontend
+docker-test-frontend: ## Run TypeScript check inside the test container
+	docker compose -f docker/docker-compose.test.yml run --rm frontend-check
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 .PHONY: setup
 setup: ## Install all dev tools and dependencies
-	@echo "$(YELLOW)Installing Go tools...$(RESET)"
+	@echo "$(YELLOW)Installing Go tools (system)...$(RESET)"
 	go install github.com/air-verse/air@latest
 	go install github.com/swaggo/swag/cmd/swag@latest
 	@echo "$(YELLOW)Installing frontend dependencies...$(RESET)"
 	cd $(FRONTEND) && npm install
-	@echo "$(YELLOW)Installing pre-commit...$(RESET)"
-	@command -v pip >/dev/null 2>&1 && pip install pre-commit --break-system-packages 2>/dev/null || echo "Please install pre-commit manually: https://pre-commit.com/#install"
-	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || echo "pre-commit not found, skipping install"
-	@echo "$(GREEN)Setup complete.$(RESET)"
+	@echo "$(YELLOW)Setting up git hooks...$(RESET)"
+	git config core.hooksPath .githooks
+	@echo "$(YELLOW)Pre-building Docker test image...$(RESET)"
+	$(MAKE) docker-build-test
+	@echo "$(GREEN)Setup complete. You only need Docker to develop.$(RESET)"
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 .PHONY: clean

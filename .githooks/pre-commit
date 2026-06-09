@@ -1,33 +1,25 @@
 #!/bin/sh
-# Pre-commit hook — runs all checks inside Docker containers.
-# Dev machine only needs Docker installed.
-
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
 
 PASS=true
+TEST_COMPOSE="docker compose -f docker/docker-compose.test.yml"
 
 CHANGED_GO=$(git diff --cached --name-only --diff-filter=ACMR | grep -c '^backend/.*\.go$' || true)
 CHANGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -c '^frontend/src/.*\.\(ts\|tsx\)$' || true)
 
-# ── Backend: lint + test ──────────────────────────────────────────────────
 if [ "$CHANGED_GO" -gt 0 ]; then
-  COMPOSE="docker compose -f docker/docker-compose.dev.yml"
   echo "=== Checking Go code ==="
-  $COMPOSE run --rm --no-deps dns-server \
-    sh -c '
-      go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run ./... && \
-      go test ./...
-    ' || { echo "FAIL: Go checks"; PASS=false; }
+  $TEST_COMPOSE run --rm --no-deps backend-check \
+    sh -c "golangci-lint run ./... && go test ./..." \
+    || { echo "FAIL: Go checks"; PASS=false; }
 fi
 
-# ── Frontend: typecheck ───────────────────────────────────────────────────
 if [ "$CHANGED_TS" -gt 0 ]; then
   echo "=== Checking TypeScript ==="
-  docker compose -f docker/docker-compose.dev.yml run --rm --no-deps \
-    --entrypoint sh frontend \
-    -c 'npx tsc --noEmit' || { echo "FAIL: TypeScript"; PASS=false; }
+  $TEST_COMPOSE run --rm --no-deps frontend-check \
+    || { echo "FAIL: TypeScript check"; PASS=false; }
 fi
 
 $PASS || exit 1
