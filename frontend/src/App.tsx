@@ -50,12 +50,34 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-async function exportLogsCSV(last24h: boolean) {
-  const cutoff = last24h ? new Date(Date.now() - 86400_000).toISOString() : undefined
-  const logs = await apiGet<Array<{ id: number; timestamp: string; domain: string; client_ip: string; action: string }>>('/logs?limit=5000')
-  const filtered = cutoff ? logs.filter(l => l.timestamp >= cutoff) : logs
+type TimeRange =
+  | { mode: 'live' }
+  | { mode: 'preset'; hours: number; label: string }
+  | { mode: 'custom'; from: string; to: string }
+
+function rangeLabel(r: TimeRange): string {
+  if (r.mode === 'live') return 'Live'
+  if (r.mode === 'preset') return r.label
+  if (r.from && r.to) return `${r.from.slice(0, 16)} → ${r.to.slice(0, 16)}`
+  return 'Custom Range'
+}
+
+function rangeCutoff(r: TimeRange): { from?: string; to?: string } {
+  if (r.mode === 'live') return {}
+  if (r.mode === 'preset') return { from: new Date(Date.now() - r.hours * 3_600_000).toISOString() }
+  return { from: r.from ? new Date(r.from).toISOString() : undefined, to: r.to ? new Date(r.to).toISOString() : undefined }
+}
+
+async function exportLogsCSV(range: TimeRange) {
+  const { from, to } = rangeCutoff(range)
+  const logs = await apiGet<Array<{ id: number; timestamp: string; domain: string; client_ip: string; action: string }>>('/logs?limit=10000')
+  const filtered = logs.filter(l => {
+    if (from && l.timestamp < from) return false
+    if (to   && l.timestamp > to)   return false
+    return true
+  })
   if (filtered.length === 0) {
-    toast.info('No logs to export', { description: last24h ? 'No queries in the last 24 hours.' : 'No query logs found.' })
+    toast.info('No logs to export', { description: `No queries found for the selected range.` })
     return
   }
   const header = 'id,timestamp,domain,client_ip,action'
@@ -65,7 +87,7 @@ async function exportLogsCSV(last24h: boolean) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `netshield-logs-${new Date().toISOString().slice(0, 10)}${last24h ? '-24h' : ''}.csv`
+  a.download = `netshield-logs-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
   toast.success('Report exported', { description: `${filtered.length} entries downloaded.` })
@@ -292,14 +314,32 @@ function NetworkLoadChart() {
   )
 }
 
+const PRESETS: TimeRange[] = [
+  { mode: 'live' },
+  { mode: 'preset', hours: 1,    label: 'Last 1 Hour'  },
+  { mode: 'preset', hours: 24,   label: 'Last 24 Hours' },
+  { mode: 'preset', hours: 168,  label: 'Last 7 Days'  },
+]
+
 const Dashboard = () => {
-  const [last24h, setLast24h] = useState(false)
+  const [range, setRange] = useState<TimeRange>({ mode: 'live' })
+  const [showPicker, setShowPicker] = useState(false)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo,   setCustomTo]   = useState('')
   const [exporting, setExporting] = useState(false)
+
+  const applyCustom = () => {
+    if (!customFrom || !customTo) return
+    setRange({ mode: 'custom', from: customFrom, to: customTo })
+    setShowPicker(false)
+  }
 
   const handleExport = async () => {
     setExporting(true)
-    try { await exportLogsCSV(last24h) } finally { setExporting(false) }
+    try { await exportLogsCSV(range) } finally { setExporting(false) }
   }
+
+  const isLive = range.mode === 'live'
 
   return (
     <PageTransition>
@@ -309,16 +349,81 @@ const Dashboard = () => {
             <h2 className="text-2xl font-bold tracking-tight text-foreground">Network Overview</h2>
             <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Real-time monitoring for your DNS server.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={last24h ? 'default' : 'outline'}
-              size="sm"
-              className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm"
-              onClick={() => setLast24h(v => !v)}
-            >
-              <Calendar className="h-3.5 w-3.5" />
-              {last24h ? 'Last 24 Hours ✓' : 'Last 24 Hours'}
-            </Button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Time range selector */}
+            <div className="relative">
+              <div className="flex bg-muted/50 p-0.5 gap-0">
+                {PRESETS.map(p => {
+                  const label = p.mode === 'live' ? 'Live' : (p.mode === 'preset' ? p.label : 'Custom')
+                  const active = range.mode === p.mode && (p.mode !== 'preset' || (range.mode === 'preset' && range.hours === p.hours))
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => { setRange(p); setShowPicker(false) }}
+                      className={`px-3 h-8 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        active
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {p.mode === 'live' && (
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${active ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/40'}`} />
+                      )}
+                      {label}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setShowPicker(v => !v)}
+                  className={`px-3 h-8 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 ${
+                    range.mode === 'custom'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Calendar className="h-3 w-3" />
+                  {range.mode === 'custom' ? rangeLabel(range) : 'Custom'}
+                </button>
+              </div>
+
+              {/* Custom date-time range picker dropdown */}
+              {showPicker && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-card shadow-xl p-4 w-[340px] space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Custom Date & Time Range</p>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1">From</label>
+                      <input
+                        type="datetime-local"
+                        value={customFrom}
+                        onChange={e => setCustomFrom(e.target.value)}
+                        className="w-full bg-muted px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1">To</label>
+                      <input
+                        type="datetime-local"
+                        value={customTo}
+                        onChange={e => setCustomTo(e.target.value)}
+                        className="w-full bg-muted px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" className="flex-1 text-[10px] font-bold uppercase tracking-widest" onClick={applyCustom} disabled={!customFrom || !customTo}>
+                      Apply Range
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => setShowPicker(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Export */}
             <Button
               size="sm"
               className="gap-2 shadow-sm text-[10px] font-bold uppercase tracking-widest"
@@ -332,7 +437,6 @@ const Dashboard = () => {
         </div>
 
         <StatsCards />
-
         <NetworkLoadChart />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">

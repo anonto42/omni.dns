@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Copy, ChevronLeft, ChevronRight, ChevronDown, Trash2, Search, FileX, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { getLogs, clearLogs, type QueryLog } from '../api'
 import { usePolling } from '../../../hooks/usePolling'
 import { useWindowFocus } from '../../../hooks/useWindowFocus'
+import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
@@ -37,6 +39,7 @@ function guessType(domain: string): string {
 interface Props { compact?: boolean }
 
 export default function LogTable({ compact }: Props) {
+  const navigate = useNavigate()
   const [logs, setLogs] = useState<QueryLog[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'blocked' | 'allowed' | 'cached'>('all')
@@ -153,7 +156,7 @@ export default function LogTable({ compact }: Props) {
         {compact && (
           <CardHeader className="pb-4 flex flex-row items-center justify-between bg-muted/5">
             <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Recent Queries</CardTitle>
-            <Button variant="link" size="sm" className="h-auto p-0 text-[10px] font-bold uppercase tracking-widest text-primary">View All</Button>
+            <Button variant="link" size="sm" className="h-auto p-0 text-[10px] font-bold uppercase tracking-widest text-primary" onClick={() => navigate('/logs')}>View All</Button>
           </CardHeader>
         )}
 
@@ -218,7 +221,7 @@ export default function LogTable({ compact }: Props) {
                           <Button
                             variant="ghost" size="icon"
                             className="h-5 w-5 opacity-0 group-hover/cell:opacity-100 transition-opacity shrink-0"
-                            onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(l.domain || '').then(() => toast.success('Copied to clipboard', { description: l.domain })) }}
+                            onClick={e => { e.stopPropagation(); copyToClipboard(l.domain || '') }}
                           >
                             <Copy className="h-3 w-3 text-muted-foreground" />
                           </Button>
@@ -282,7 +285,7 @@ export default function LogTable({ compact }: Props) {
                                 <Button
                                   variant="ghost" size="icon"
                                   className="h-6 w-6 shrink-0"
-                                  onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(l.domain || '').then(() => toast.success('Copied to clipboard', { description: l.domain })) }}
+                                  onClick={e => { e.stopPropagation(); copyToClipboard(l.domain || '') }}
                                 >
                                   <Copy className="h-3 w-3 text-muted-foreground" />
                                 </Button>

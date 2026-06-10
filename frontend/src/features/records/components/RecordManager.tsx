@@ -12,6 +12,7 @@ import {
   ServerOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { copyToClipboard } from '@/lib/clipboard'
 import { getRecords, addRecord, deleteRecord } from '../api'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -96,9 +97,7 @@ export default function RecordManager() {
   }
 
   const handleCopy = (val: string) => {
-    navigator.clipboard.writeText(val).then(() =>
-      toast.success('Copied to clipboard', { description: val })
-    )
+    copyToClipboard(val)
   }
 
   const entries = Object.entries(records || {})
