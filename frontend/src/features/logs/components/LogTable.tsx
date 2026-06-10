@@ -28,7 +28,6 @@ function formatTs(ts: string, compact: boolean) {
   return d.toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
-// Derive a rough record type from the domain (heuristic — backend doesn't return it)
 function guessType(domain: string): string {
   if (domain.endsWith('.arpa')) return 'PTR'
   if (domain.startsWith('_')) return 'SRV'
@@ -88,6 +87,7 @@ export default function LogTable({ compact }: Props) {
       <TableRow key={i} className={i % 2 === 1 ? 'bg-muted/20' : ''}>
         <TableCell><Skeleton className="h-3 w-28" /></TableCell>
         {!compact && <TableCell><Skeleton className="h-3 w-24" /></TableCell>}
+        {!compact && <TableCell><Skeleton className="h-3 w-32" /></TableCell>}
         <TableCell><Skeleton className="h-3 w-36" /></TableCell>
         {!compact && <TableCell><Skeleton className="h-3 w-10" /></TableCell>}
         <TableCell className="text-right"><Skeleton className="h-5 w-14 ml-auto" /></TableCell>
@@ -107,21 +107,23 @@ export default function LogTable({ compact }: Props) {
       />
 
       <Card className={`overflow-hidden shadow-sm${compact ? ' h-full flex flex-col' : ''}`}>
+        {/* Full page header — two-container toolbar, no title */}
         {!compact && (
-          <CardHeader className="pb-4 bg-muted/5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <CardTitle className="text-lg font-bold tracking-tight text-foreground">Query Logs</CardTitle>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    value={domainSearch}
-                    onChange={e => handleDomainSearch(e.target.value)}
-                    placeholder="Filter by domain…"
-                    className="pl-8 h-8 w-44 text-xs"
-                  />
-                </div>
-                <div className="flex bg-muted/50 p-1 w-fit">
+          <CardHeader className="pb-3 bg-muted/5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Left: search */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={domainSearch}
+                  onChange={e => handleDomainSearch(e.target.value)}
+                  placeholder="Filter by domain…"
+                  className="pl-8 h-8 text-xs w-full"
+                />
+              </div>
+              {/* Right: filter pills + clear */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex bg-muted/50 p-1">
                   {(['all', 'allowed', 'blocked', 'cached'] as const).map((f) => (
                     <Button
                       key={f}
@@ -137,7 +139,7 @@ export default function LogTable({ compact }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="gap-1.5 text-[10px] font-bold uppercase tracking-widest text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="gap-1.5 text-[10px] font-bold uppercase tracking-widest text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-3"
                   onClick={() => setConfirmClear(true)}
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Clear
@@ -146,6 +148,8 @@ export default function LogTable({ compact }: Props) {
             </div>
           </CardHeader>
         )}
+
+        {/* Compact (dashboard) header */}
         {compact && (
           <CardHeader className="pb-4 flex flex-row items-center justify-between bg-muted/5">
             <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Recent Queries</CardTitle>
@@ -159,6 +163,7 @@ export default function LogTable({ compact }: Props) {
               <TableRow className="bg-muted/30">
                 <TableHead className="w-[190px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-4">Timestamp</TableHead>
                 {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Client IP</TableHead>}
+                {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-[150px]">MAC Address</TableHead>}
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Domain</TableHead>
                 {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-[60px]">Type</TableHead>}
                 <TableHead className="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground pr-4">Status</TableHead>
@@ -167,7 +172,7 @@ export default function LogTable({ compact }: Props) {
             <TableBody>
               {loading ? renderSkeletonRows(compact ? 5 : 8) : displayLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={compact ? 3 : 5} className="h-32 text-center">
+                  <TableCell colSpan={compact ? 3 : 6} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-3 py-4 text-muted-foreground">
                       <FileX className="h-8 w-8 opacity-40" />
                       <div>
@@ -198,9 +203,16 @@ export default function LogTable({ compact }: Props) {
                           <span className="font-mono text-[11px] text-muted-foreground">{l.client_ip || '—'}</span>
                         </TableCell>
                       )}
+                      {!compact && (
+                        <TableCell>
+                          <span className={`font-mono text-[11px] ${l.mac_address ? 'text-foreground' : 'text-muted-foreground/40'}`}>
+                            {l.mac_address || '—'}
+                          </span>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex items-center gap-2 group/cell">
-                          <span className={`font-mono text-[12px] font-medium truncate max-w-[140px] sm:max-w-[280px] ${l.action === 'blocked' ? 'text-destructive' : 'text-foreground'}`}>
+                          <span className={`font-mono text-[12px] font-medium truncate max-w-[140px] sm:max-w-[260px] ${l.action === 'blocked' ? 'text-destructive' : 'text-foreground'}`}>
                             {l.domain}
                           </span>
                           <Button
@@ -227,7 +239,7 @@ export default function LogTable({ compact }: Props) {
                     {/* Expanded detail row */}
                     {isExpanded && !compact && (
                       <TableRow key={`${l.id}-detail`} className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={5} className="py-3 px-4">
+                        <TableCell colSpan={6} className="py-3 px-4">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div>
                               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Query ID</p>
@@ -242,12 +254,16 @@ export default function LogTable({ compact }: Props) {
                               <p className="font-mono text-xs text-foreground">{l.client_ip || '—'}</p>
                             </div>
                             <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">MAC Address</p>
+                              <p className="font-mono text-xs text-foreground">{l.mac_address || '—'}</p>
+                            </div>
+                            <div>
                               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Action</p>
                               <span className={`inline-flex items-center uppercase text-[9px] font-bold px-2 py-0.5 tracking-wider ${config.className}`}>
                                 {config.label}
                               </span>
                             </div>
-                            <div className="col-span-2 sm:col-span-4">
+                            <div className="col-span-2 sm:col-span-3">
                               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Full Domain</p>
                               <div className="flex items-center gap-2">
                                 <code className="font-mono text-xs text-foreground bg-muted/50 px-2 py-1 block">{l.domain}</code>

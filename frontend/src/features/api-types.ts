@@ -431,6 +431,8 @@ export interface components {
             domain?: string;
             /** @example 1 */
             id?: number;
+            /** @example aa:bb:cc:dd:ee:ff */
+            mac_address?: string;
             /** @example 2024-10-25T10:00:00Z */
             timestamp?: string;
         };
