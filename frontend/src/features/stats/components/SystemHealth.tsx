@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getStatus, type Status } from '../api';
 import { usePolling } from '../../../hooks/usePolling';
+import { useWindowFocus } from '../../../hooks/useWindowFocus';
 
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)}s`
@@ -43,6 +44,7 @@ export const SystemHealth: React.FC = () => {
   }, [])
 
   usePolling(fetchFn, 3000)
+  useWindowFocus(fetchFn)
 
   const uptime = status?.uptime_seconds ?? 0
   const ch = status?.cache_hits ?? 0

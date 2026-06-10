@@ -81,42 +81,78 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 }
 
 const CHART_POINTS = 30
+const TOOLTIP_STYLE = {
+  background: 'hsl(var(--card))',
+  border: 'none',
+  borderRadius: 0,
+  fontSize: 11,
+  fontFamily: 'monospace',
+  boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+}
 
+// Each sample stores the DELTA (new queries since last poll), not cumulative totals.
 type ChartSample = { time: string; total: number; blocked: number; cached: number; allowed: number }
+// Snapshot of raw cumulative counts from the API — used to compute deltas.
+type Snapshot = { forwarded: number; blocked: number; cached: number }
 
 function NetworkLoadChart() {
   const [data, setData] = useState<ChartSample[]>(() =>
     Array(CHART_POINTS).fill(null).map(() => ({ time: '', total: 0, blocked: 0, cached: 0, allowed: 0 }))
   )
+  // Holds the last raw cumulative counts so we can diff
+  const prevRef = useMemo<{ current: Snapshot | null }>(() => ({ current: null }), [])
+  // Cumulative totals from API (for the analytics pills)
+  const [cumulative, setCumulative] = useState<Snapshot>({ forwarded: 0, blocked: 0, cached: 0 })
   const [loading, setLoading] = useState(true)
-  const latest = data[data.length - 1]
 
-  const fetch = useCallback(async () => {
+  const fetchFn = useCallback(async () => {
     try {
       const s = await getStatus()
-      const allowed = s.queries_forwarded ?? 0
-      const blocked = s.queries_blocked ?? 0
-      const cached  = s.queries_cached  ?? 0
+      const fwd  = s.queries_forwarded ?? 0
+      const blk  = s.queries_blocked   ?? 0
+      const cach = s.queries_cached    ?? 0
+
+      setCumulative({ forwarded: fwd, blocked: blk, cached: cach })
+
+      // Compute delta vs last snapshot
+      const prev = prevRef.current
+      const dFwd  = prev ? Math.max(0, fwd  - prev.forwarded) : 0
+      const dBlk  = prev ? Math.max(0, blk  - prev.blocked)   : 0
+      const dCach = prev ? Math.max(0, cach - prev.cached)    : 0
+      prevRef.current = { forwarded: fwd, blocked: blk, cached: cach }
+
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-      setData(prev => [...prev.slice(1), { time, total: allowed + blocked + cached, allowed, blocked, cached }])
+      setData(prev => [...prev.slice(1), {
+        time,
+        total:   dFwd + dBlk + dCach,
+        allowed: dFwd,
+        blocked: dBlk,
+        cached:  dCach,
+      }])
       setLoading(false)
     } catch { setLoading(false) }
-  }, [])
+  }, [prevRef])
 
-  usePolling(fetch, 3000)
+  usePolling(fetchFn, 3000)
+
+  const cumTotal = cumulative.forwarded + cumulative.blocked + cumulative.cached
+  const cumPctBlocked  = cumTotal > 0 ? Math.round((cumulative.blocked  / cumTotal) * 100) : 0
+  const cumPctAllowed  = cumTotal > 0 ? Math.round((cumulative.forwarded / cumTotal) * 100) : 0
+  const cumPctCached   = cumTotal > 0 ? Math.round((cumulative.cached   / cumTotal) * 100) : 0
 
   const pieData = useMemo(() => [
-    { name: 'Allowed', value: latest.allowed, color: '#22c55e' },
-    { name: 'Blocked', value: latest.blocked, color: '#f43f5e' },
-    { name: 'Cached',  value: latest.cached,  color: 'hsl(var(--primary))' },
-  ].filter(d => d.value > 0), [latest])
+    { name: 'Allowed', value: cumulative.forwarded, pct: cumPctAllowed,  color: '#22c55e' },
+    { name: 'Blocked', value: cumulative.blocked,   pct: cumPctBlocked,  color: '#f43f5e' },
+    { name: 'Cached',  value: cumulative.cached,    pct: cumPctCached,   color: 'hsl(var(--primary))' },
+  ].filter(d => d.value > 0), [cumulative, cumPctAllowed, cumPctBlocked, cumPctCached])
 
-  const hasData = latest.total > 0
+  const hasData = cumTotal > 0
 
   return (
     <Card className="overflow-hidden shadow-sm">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+      <CardHeader className="pb-0 pt-4 px-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* Title */}
           <div>
             <CardTitle className="text-lg flex items-center gap-2 font-bold tracking-tight text-foreground">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -126,32 +162,44 @@ function NetworkLoadChart() {
               Live query rate · updates every 3s
             </CardDescription>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-foreground">{latest.total.toLocaleString()}</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Queries</p>
+
+          {/* Analytics pills */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Total Queries',    value: cumTotal.toLocaleString(),          color: 'text-foreground',                   bg: 'bg-muted/50' },
+              { label: 'Blocked',          value: cumulative.blocked.toLocaleString(), color: 'text-rose-500',                     bg: 'bg-rose-500/10' },
+              { label: '% Blocked',        value: `${cumPctBlocked}%`,                color: 'text-rose-500',                     bg: 'bg-rose-500/10' },
+              { label: '% Allowed',        value: `${cumPctAllowed}%`,                color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
+            ].map(pill => (
+              <div key={pill.label} className={`flex flex-col items-center px-3 py-1.5 ${pill.bg}`}>
+                <span className={`text-sm font-bold tabular-nums ${pill.color}`}>{loading ? '—' : pill.value}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{pill.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pb-4 px-2">
+
+      <CardContent className="pb-4 px-2 pt-2">
         {loading ? (
-          <Skeleton className="w-full h-[180px]" />
+          <Skeleton className="w-full h-[200px]" />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
             {/* Area chart — 2/3 width */}
             <div className="lg:col-span-2">
-              <ResponsiveContainer width="100%" height={180}>
+              <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradAllowed" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.15} />
+                      <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.2} />
                       <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradBlocked" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#f43f5e" stopOpacity={0.15} />
+                      <stop offset="5%"  stopColor="#f43f5e" stopOpacity={0.2} />
                       <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradCached" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                      <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
                       <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -161,47 +209,42 @@ function NetworkLoadChart() {
                     tick={{ fontSize: 9, fontFamily: 'monospace', fill: 'currentColor', opacity: 0.4 }}
                     tickLine={false}
                     axisLine={false}
-                    interval={Math.floor(CHART_POINTS / 4)}
+                    interval={Math.floor(CHART_POINTS / 5)}
                   />
                   <YAxis
                     tick={{ fontSize: 9, fontFamily: 'monospace', fill: 'currentColor', opacity: 0.4 }}
                     tickLine={false}
                     axisLine={false}
                     allowDecimals={false}
-                    width={36}
+                    width={30}
+                    label={{ value: 'req/3s', angle: -90, position: 'insideLeft', offset: 16, style: { fontSize: 8, fill: 'currentColor', opacity: 0.3, fontFamily: 'monospace' } }}
                   />
                   <RechartsTooltip
-                    contentStyle={{
-                      background: 'hsl(var(--card))',
-                      border: 'none',
-                      borderRadius: 0,
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-                    }}
+                    contentStyle={TOOLTIP_STYLE}
                     labelStyle={{ color: 'hsl(var(--muted-foreground))', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 9 }}
                     itemStyle={{ color: 'hsl(var(--foreground))' }}
                     cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 2' }}
+                    formatter={(value: number, name: string) => [`${value} req`, name]}
                   />
-                  <Area type="monotone" dataKey="allowed" name="Allowed" stroke="#22c55e" strokeWidth={1.5} fill="url(#gradAllowed)" dot={false} />
-                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#f43f5e" strokeWidth={1.5} fill="url(#gradBlocked)" dot={false} />
-                  <Area type="monotone" dataKey="cached"  name="Cached"  stroke="hsl(var(--primary))" strokeWidth={1.5} fill="url(#gradCached)" dot={false} />
+                  <Area type="monotone" dataKey="allowed" name="Allowed" stroke="#22c55e" strokeWidth={1.5} fill="url(#gradAllowed)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#f43f5e" strokeWidth={1.5} fill="url(#gradBlocked)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="cached"  name="Cached"  stroke="hsl(var(--primary))" strokeWidth={1.5} fill="url(#gradCached)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Pie chart breakdown — 1/3 width */}
-            <div className="flex flex-col items-center justify-center px-2">
+            {/* Donut + legend — 1/3 width */}
+            <div className="flex flex-col items-center justify-center px-2 py-2">
               {hasData ? (
                 <>
-                  <ResponsiveContainer width="100%" height={130}>
+                  <ResponsiveContainer width="100%" height={140}>
                     <PieChart>
                       <Pie
                         data={pieData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={38}
-                        outerRadius={56}
+                        innerRadius={42}
+                        outerRadius={60}
                         paddingAngle={2}
                         dataKey="value"
                         strokeWidth={0}
@@ -211,29 +254,34 @@ function NetworkLoadChart() {
                         ))}
                       </Pie>
                       <RechartsTooltip
-                        contentStyle={{ background: 'hsl(var(--card))', border: 'none', fontSize: 11, fontFamily: 'monospace', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}
+                        contentStyle={TOOLTIP_STYLE}
                         itemStyle={{ color: 'hsl(var(--foreground))' }}
+                        formatter={(value: number, name: string) => [value.toLocaleString(), name]}
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="space-y-1 w-full px-2">
+                  <div className="w-full space-y-1.5 px-1">
                     {pieData.map(d => (
-                      <div key={d.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2" style={{ background: d.color }} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{d.name}</span>
+                      <div key={d.name} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-2 h-2 shrink-0" style={{ background: d.color }} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{d.name}</span>
                         </div>
-                        <span className="text-[10px] font-bold text-foreground">{d.value}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-bold text-foreground tabular-nums">{d.value.toLocaleString()}</span>
+                          <span className="text-[9px] text-muted-foreground tabular-nums">({d.pct}%)</span>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-2 py-8">
+                <div className="flex flex-col items-center gap-2 py-10">
                   <div className="w-16 h-16 bg-muted/30 flex items-center justify-center">
                     <BarChart3 className="h-6 w-6 text-muted-foreground/30" />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">No traffic yet</p>
+                  <p className="text-[9px] text-muted-foreground/60 text-center">Make a DNS query to see data</p>
                 </div>
               )}
             </div>
