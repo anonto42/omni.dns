@@ -132,7 +132,7 @@ export default function BlocklistManager() {
           <h2 className="text-2xl font-bold tracking-tight text-foreground">Blocklist Management</h2>
           <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Control the security perimeter of your network by managing active blocklists.</p>
         </div>
-        <Card className="flex items-center gap-6 p-6 min-w-full md:min-w-[320px] shadow-sm border-border/50">
+        <Card className="flex items-center gap-6 p-6 min-w-full md:min-w-[320px] shadow-sm">
           <div className="h-12 w-12 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive shrink-0 border border-destructive/20">
             <Ban className="h-6 w-6" />
           </div>
@@ -154,7 +154,7 @@ export default function BlocklistManager() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-8">
-          <Card className="shadow-sm border-border/50">
+          <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-bold tracking-tight text-foreground">Add New Adlist</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Add a new source for domain filtering.</CardDescription>
@@ -174,7 +174,7 @@ export default function BlocklistManager() {
                   <textarea
                     value={listDesc}
                     onChange={(e) => setListDesc(e.target.value)}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium"
+                    className="flex min-h-[80px] w-full bg-muted px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium text-foreground"
                     placeholder="Brief description of this list..."
                     rows={2}
                   />
@@ -194,7 +194,7 @@ export default function BlocklistManager() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm border-border/50">
+          <Card className="shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-bold tracking-tight text-foreground">Block Individual Domain</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Manually add a domain to the blocklist.</CardDescription>
@@ -217,7 +217,7 @@ export default function BlocklistManager() {
           </Card>
 
           {list.length > 0 && (
-            <Card className="shadow-sm border-border/50">
+            <Card className="shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold tracking-tight text-foreground">Recently Blocked</CardTitle>
               </CardHeader>
@@ -248,17 +248,17 @@ export default function BlocklistManager() {
           </Card>
         </div>
 
-        <Card className="lg:col-span-8 overflow-hidden shadow-sm border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/50 bg-muted/5">
+        <Card className="lg:col-span-8 overflow-hidden shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b bg-muted/5">
             <div>
               <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Active Blocklists</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Currently active domain filters.</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+              <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
                 <Download className="h-4 w-4" /> Update All
               </Button>
-              <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+              <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
                 <Filter className="h-4 w-4" /> Filters
               </Button>
             </div>
@@ -266,7 +266,7 @@ export default function BlocklistManager() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/20 border-b border-border/50">
+                <TableRow className="bg-muted/20 border-b">
                   <TableHead className="w-[300px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Source Name</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Domains</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Last Synced</TableHead>
@@ -335,14 +335,14 @@ export default function BlocklistManager() {
               </TableBody>
             </Table>
           </div>
-          <div className="p-4 border-t border-border/50 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-4 border-t bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-4">
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Showing {sources.length} active blocklists</span>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-7 w-7 rounded-md border-border/50" disabled>
+              <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled>
                 <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
               <Button size="sm" className="h-7 px-3 text-[10px] font-bold rounded-md">1</Button>
-              <Button variant="outline" size="icon" className="h-7 w-7 rounded-md border-border/50" disabled>
+              <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>

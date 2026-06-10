@@ -94,7 +94,7 @@ function NetworkLoadChart() {
   const bars = samples.map(v => Math.round((v / max) * 100))
 
   return (
-    <Card className="overflow-hidden relative group border border-border/50 shadow-sm">
+    <Card className="overflow-hidden relative group shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2 font-bold tracking-tight text-foreground">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -139,7 +139,7 @@ const Dashboard = () => (
           <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Real-time monitoring for your DNS server.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+          <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
             <Calendar className="h-3.5 w-3.5" />
             Last 24 Hours
           </Button>
@@ -295,7 +295,7 @@ const SteeringPage = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <Card className="lg:col-span-8 shadow-sm border-border/50">
+          <Card className="lg:col-span-8 shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
                 <PlusCircle className="h-5 w-5 text-primary" />
@@ -311,13 +311,13 @@ const SteeringPage = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-foreground">Priority</label>
-                  <select value={priority} onChange={e => setPriority(Number(e.target.value))} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium">
+                  <select value={priority} onChange={e => setPriority(Number(e.target.value))} className="flex h-10 w-full items-center justify-between bg-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium text-foreground">
                     {[1,2,3,4,5,6,7,8,9,10].map(p => <option key={p} value={p}>#{p}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-foreground">Condition Type</label>
-                  <select value={conditionType} onChange={(e) => setConditionType(e.target.value)} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium">
+                  <select value={conditionType} onChange={(e) => setConditionType(e.target.value)} className="flex h-10 w-full items-center justify-between bg-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium text-foreground">
                     <option>Domain</option>
                     <option>Client IP</option>
                     <option>Query Type</option>
@@ -330,7 +330,7 @@ const SteeringPage = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-foreground">Action</label>
-                  <select value={actionType} onChange={(e) => { setActionType(e.target.value); if (e.target.value === 'Block') setActionValue('') }} className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium">
+                  <select value={actionType} onChange={(e) => { setActionType(e.target.value); if (e.target.value === 'Block') setActionValue('') }} className="flex h-10 w-full items-center justify-between bg-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium text-foreground">
                     <option>Forward</option>
                     <option>Block</option>
                     <option>Redirect</option>
@@ -342,7 +342,7 @@ const SteeringPage = () => {
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest border-border/50" onClick={() => { setName(''); setConditionValue(''); setActionValue('') }}>Cancel</Button>
+                <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => { setName(''); setConditionValue(''); setActionValue('') }}>Cancel</Button>
                 <Button className="text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handleAdd} disabled={saving}>{saving ? 'Adding…' : 'Add Rule'}</Button>
               </div>
             </CardContent>
@@ -360,7 +360,7 @@ const SteeringPage = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="shadow-sm border-border/50">
+            <Card className="shadow-sm">
               <CardContent className="p-6 flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-foreground">{rules.length}</p>
@@ -372,20 +372,20 @@ const SteeringPage = () => {
           </div>
         </div>
 
-        <Card className="overflow-hidden shadow-sm border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/50 bg-muted/5">
+        <Card className="overflow-hidden shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-4 bg-muted/5">
             <div>
               <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Steering Rules</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Ordered by priority — higher rules are evaluated first.</CardDescription>
             </div>
-            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
               <Power className="h-4 w-4" /> Toggle All
             </Button>
           </CardHeader>
           <div className="overflow-x-auto p-4 pt-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/20 border-b border-border/50">
+                <TableRow className="bg-muted/20">
                   <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-[60px]">#</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Rule</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Condition</TableHead>
@@ -407,7 +407,7 @@ const SteeringPage = () => {
                       <TableCell><span className="text-xs font-bold text-muted-foreground">#{rule.priority}</span></TableCell>
                       <TableCell><span className="font-semibold text-foreground">{rule.name}</span></TableCell>
                       <TableCell>
-                        <code className="bg-muted px-2 py-0.5 rounded text-xs font-medium border border-border/50 text-muted-foreground">{rule.condition_type}: {rule.condition_value}</code>
+                        <code className="bg-muted px-2 py-0.5 rounded text-xs font-medium text-muted-foreground">{rule.condition_type}: {rule.condition_value}</code>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <Badge variant="outline" className={`font-bold text-[9px] px-2 py-0 border-none ${rule.action_type === 'Block' ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
@@ -490,7 +490,7 @@ const SettingsPage = () => {
 
         {!loaded ? (
           <div className="grid gap-6">
-            <Card className="shadow-sm border border-border">
+            <Card className="shadow-sm">
               <CardHeader><Skeleton className="h-5 w-40" /></CardHeader>
               <CardContent className="space-y-4">
                 <Skeleton className="h-10 w-full" />
@@ -500,7 +500,7 @@ const SettingsPage = () => {
           </div>
         ) : (
           <div className="grid gap-6">
-            <Card className="shadow-sm border border-border">
+            <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="font-bold tracking-tight text-foreground">Appearance</CardTitle>
                 <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Choose between light, dark, or follow your device setting.</CardDescription>
@@ -511,7 +511,7 @@ const SettingsPage = () => {
                     <button
                       key={value}
                       onClick={() => setTheme(value)}
-                      className={`flex flex-col items-center gap-2 p-4 border transition-colors cursor-pointer ${theme === value ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground'}`}
+                      className={`flex flex-col items-center gap-2 p-4 transition-colors cursor-pointer ${theme === value ? 'bg-primary/10 text-primary' : 'bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground'}`}
                     >
                       <Icon className="h-5 w-5" />
                       <span className="text-xs font-bold uppercase tracking-widest">{label}</span>
@@ -521,7 +521,7 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border border-border">
+            <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="font-bold tracking-tight text-foreground">General Configuration</CardTitle>
                 <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Basic node settings and updates.</CardDescription>
@@ -532,9 +532,9 @@ const SettingsPage = () => {
                     <p className="text-sm font-bold text-foreground">Server Name</p>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Identify this node in your cluster</p>
                   </div>
-                  <input className="flex h-9 w-full sm:w-64 border border-border bg-background px-3 py-1 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-medium text-foreground" value={serverName} onChange={e => setServerName(e.target.value)} />
+                  <input className="flex h-9 w-full sm:w-64 bg-muted px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium text-foreground" value={serverName} onChange={e => setServerName(e.target.value)} />
                 </div>
-                <div className="h-[1px] bg-border" />
+                <div className="h-[1px] bg-muted" />
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <p className="text-sm font-bold text-foreground">Automatic Updates</p>
@@ -545,7 +545,7 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border border-border">
+            <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="font-bold tracking-tight text-foreground">Upstream DNS</CardTitle>
                 <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Select your preferred upstream DNS provider for resolution.</CardDescription>
@@ -553,28 +553,28 @@ const SettingsPage = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {UPSTREAM_OPTIONS.map((opt) => (
-                    <div key={opt.value} onClick={() => setUpstream(opt.value)} className={`flex items-center space-x-3 p-3 border transition-colors cursor-pointer ${upstream === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30'}`}>
-                      <div className={`h-4 w-4 border flex items-center justify-center transition-colors ${upstream === opt.value ? 'bg-primary border-primary' : 'border-border'}`}>
+                    <div key={opt.value} onClick={() => setUpstream(opt.value)} className={`flex items-center space-x-3 p-3 transition-colors cursor-pointer ${upstream === opt.value ? 'bg-primary/10 text-primary' : 'bg-muted/40 hover:bg-muted/70'}`}>
+                      <div className={`h-4 w-4 flex items-center justify-center transition-colors ${upstream === opt.value ? 'bg-primary' : 'bg-muted'}`}>
                         {upstream === opt.value && <div className="h-1.5 w-1.5 bg-primary-foreground" />}
                       </div>
                       <span className="text-sm font-bold text-foreground">{opt.label}</span>
                     </div>
                   ))}
-                  <div onClick={() => setUpstream('custom')} className={`flex items-center space-x-3 p-3 border transition-colors cursor-pointer ${isCustom ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30'}`}>
-                    <div className={`h-4 w-4 border flex items-center justify-center transition-colors ${isCustom ? 'bg-primary border-primary' : 'border-border'}`}>
+                  <div onClick={() => setUpstream('custom')} className={`flex items-center space-x-3 p-3 transition-colors cursor-pointer ${isCustom ? 'bg-primary/10 text-primary' : 'bg-muted/40 hover:bg-muted/70'}`}>
+                    <div className={`h-4 w-4 flex items-center justify-center transition-colors ${isCustom ? 'bg-primary' : 'bg-muted'}`}>
                       {isCustom && <div className="h-1.5 w-1.5 bg-primary-foreground" />}
                     </div>
                     <span className="text-sm font-bold text-foreground">Custom Provider</span>
                   </div>
                 </div>
                 {isCustom && (
-                  <input className="flex h-9 w-full border border-border bg-background px-3 py-1 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" placeholder="e.g. 192.168.1.1:53" value={customUpstream} onChange={e => setCustomUpstream(e.target.value)} />
+                  <input className="flex h-9 w-full bg-muted px-3 py-1 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="e.g. 192.168.1.1:53" value={customUpstream} onChange={e => setCustomUpstream(e.target.value)} />
                 )}
               </CardContent>
             </Card>
 
             <div className="flex justify-end gap-3">
-              <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest border-border" onClick={() => { setServerName('north-america-east-1'); setAutoUpdate(true); setUpstream('1.1.1.1:53') }}>Discard Changes</Button>
+              <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => { setServerName('north-america-east-1'); setAutoUpdate(true); setUpstream('1.1.1.1:53') }}>Discard Changes</Button>
               <Button className="shadow-sm text-[10px] font-bold uppercase tracking-widest" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Configuration'}</Button>
             </div>
           </div>
@@ -617,7 +617,7 @@ const ProfilePage = () => {
           <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Manage your account details and preferences.</p>
         </div>
         <div className="grid gap-6">
-          <Card className="shadow-sm border-border/50">
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="font-bold tracking-tight text-foreground">Change Password</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Update your admin account password.</CardDescription>
@@ -629,14 +629,14 @@ const ProfilePage = () => {
                 return (
                   <div key={label} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <p className="text-sm font-bold text-foreground">{label}</p>
-                    <input type="password" value={val} onChange={e => setter(e.target.value)} className="flex h-9 w-full sm:w-64 rounded-md border border-border/50 bg-muted/5 px-3 py-1 text-sm shadow-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                    <input type="password" value={val} onChange={e => setter(e.target.value)} className="flex h-9 w-full sm:w-64 bg-muted px-3 py-1 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                   </div>
                 )
               })}
             </CardContent>
           </Card>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest border-border/50" onClick={() => { setCurrentPw(''); setNewPw(''); setConfirmPw('') }}>Discard</Button>
+            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => { setCurrentPw(''); setNewPw(''); setConfirmPw('') }}>Discard</Button>
             <Button className="shadow-sm text-[10px] font-bold uppercase tracking-widest" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
           </div>
         </div>
@@ -655,7 +655,7 @@ const CloudSyncPage = () => {
           <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Synchronize your configuration across nodes and clusters.</p>
         </div>
         <div className="grid gap-6">
-          <Card className="shadow-sm border-border/50">
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="font-bold tracking-tight text-foreground">Sync Status</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Current synchronization state of your cluster.</CardDescription>
@@ -670,7 +670,7 @@ const CloudSyncPage = () => {
               </div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm border-border/50">
+          <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="font-bold tracking-tight text-foreground">Sync Configuration</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Configure automatic synchronization settings.</CardDescription>
@@ -683,13 +683,13 @@ const CloudSyncPage = () => {
                 </div>
                 <Switch checked={autoSync} onCheckedChange={setAutoSync} />
               </div>
-              <div className="h-[1px] bg-border/50" />
+              <div className="h-[1px] bg-muted" />
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <p className="text-sm font-bold text-foreground">Sync Interval</p>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">How often to sync with remote nodes</p>
                 </div>
-                <select className="flex h-9 w-full sm:w-48 rounded-md border border-border/50 bg-muted/5 px-3 py-1 text-sm shadow-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <select className="flex h-9 w-full sm:w-48 bg-muted px-3 py-1 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option>Every 5 minutes</option>
                   <option>Every 15 minutes</option>
                   <option>Every hour</option>
@@ -699,7 +699,7 @@ const CloudSyncPage = () => {
             </CardContent>
           </Card>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest border-border/50" onClick={() => toast.info('Sync initiated')}>Sync Now</Button>
+            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => toast.info('Sync initiated')}>Sync Now</Button>
             <Button className="shadow-sm text-[10px] font-bold uppercase tracking-widest" onClick={() => toast.success('Cloud sync settings saved')}>Save Configuration</Button>
           </div>
         </div>
@@ -739,7 +739,7 @@ export default function App() {
         position="bottom-right"
         toastOptions={{
           classNames: {
-            toast: 'border border-border/50 bg-background text-foreground shadow-lg rounded-lg',
+            toast: 'bg-card text-foreground shadow-lg',
             title: 'text-sm font-bold',
             description: 'text-xs text-muted-foreground',
             success: 'border-emerald-500/30',

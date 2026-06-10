@@ -138,7 +138,7 @@ export default function LogTable({ compact }: Props) {
         onCancel={() => setConfirmClear(false)}
       />
 
-      <Card className="overflow-hidden shadow-sm border-border/50">
+      <Card className="overflow-hidden shadow-sm">
         {!compact && (
           <CardHeader className="pb-4 border-b border-border/50 bg-muted/5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -150,10 +150,10 @@ export default function LogTable({ compact }: Props) {
                     value={domainSearch}
                     onChange={e => handleDomainSearch(e.target.value)}
                     placeholder="Filter by domain…"
-                    className="pl-8 h-8 w-44 text-xs border-border/50"
+                    className="pl-8 h-8 w-44 text-xs"
                   />
                 </div>
-                <div className="flex bg-muted/50 p-1 rounded-lg w-fit border border-border/30">
+                <div className="flex bg-muted/50 p-1 rounded-lg w-fit">
                   {(['all', 'blocked', 'allowed'] as const).map((f) => (
                     <Button
                       key={f}
@@ -187,7 +187,7 @@ export default function LogTable({ compact }: Props) {
         <div className="overflow-x-auto p-4">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/20 border-b border-border/50">
+              <TableRow className="bg-muted/20 border-b">
                 <TableHead className="w-[200px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timestamp</TableHead>
                 {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Client</TableHead>}
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Domain</TableHead>
@@ -278,7 +278,7 @@ export default function LogTable({ compact }: Props) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-7 w-7 rounded-md border-border/50"
+                className="h-7 w-7 rounded-md"
                 disabled={page <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
               >
@@ -303,7 +303,7 @@ export default function LogTable({ compact }: Props) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-7 w-7 rounded-md border-border/50"
+                className="h-7 w-7 rounded-md"
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               >

@@ -29,11 +29,11 @@ import {
 } from '@/components/ui/table'
 
 const recordTypeStyles: Record<string, string> = {
-  A:    'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20',
-  CNAME:'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
-  AAAA: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
-  MX:   'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20',
-  TXT:  'bg-muted/50 text-muted-foreground border border-border/50',
+  A:    'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  CNAME:'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  AAAA: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+  MX:   'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+  TXT:  'bg-muted/50 text-muted-foreground',
 }
 
 function getTypeLabel(ip: string): string {
@@ -130,7 +130,7 @@ export default function RecordManager() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <Card className="lg:col-span-8 shadow-sm border-border/50">
+        <Card className="lg:col-span-8 shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               <PlusCircle className="h-5 w-5 text-primary" />
@@ -145,7 +145,7 @@ export default function RecordManager() {
                 <select
                   value={recordType}
                   onChange={(e) => setRecordType(e.target.value)}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium"
+                  className="flex h-10 w-full items-center justify-between bg-muted px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors font-medium text-foreground"
                 >
                   <option>A (IPv4 Address)</option>
                   <option>AAAA (IPv6 Address)</option>
@@ -174,7 +174,7 @@ export default function RecordManager() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest border-border/50" onClick={() => { setDomain(''); setIp('') }}>
+              <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest" onClick={() => { setDomain(''); setIp('') }}>
                 Cancel
               </Button>
               <Button className="text-[10px] font-bold uppercase tracking-widest shadow-sm" onClick={handleAdd} disabled={adding}>
@@ -197,7 +197,7 @@ export default function RecordManager() {
             </CardContent>
           </Card>
           <div className="grid grid-cols-1 gap-6 sm:hidden lg:grid">
-            <Card className="shadow-sm border-border/50">
+            <Card className="shadow-sm">
               <CardContent className="p-6 flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-foreground">{entries.length}</p>
@@ -206,7 +206,7 @@ export default function RecordManager() {
                 <CheckCircle2 className="h-6 w-6 text-emerald-500" />
               </CardContent>
             </Card>
-            <Card className="shadow-sm border-border/50">
+            <Card className="shadow-sm">
               <CardContent className="p-6 flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-foreground">0</p>
@@ -219,17 +219,17 @@ export default function RecordManager() {
         </div>
       </div>
 
-      <Card className="overflow-hidden shadow-sm border-border/50">
-        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/50 bg-muted/5">
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b bg-muted/5">
           <div>
             <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Existing Local Records</CardTitle>
             <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Authoritative records for your local domain.</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
               <Filter className="h-4 w-4" /> Filter
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest border-border/50 shadow-sm">
+            <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
               <Download className="h-4 w-4" /> Export
             </Button>
           </div>
@@ -237,7 +237,7 @@ export default function RecordManager() {
         <div className="overflow-x-auto p-4 pt-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/20 border-b border-border/50">
+              <TableRow className="bg-muted/20 border-b">
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-[100px]">Type</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Domain Name</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Value / IP</TableHead>
@@ -274,7 +274,7 @@ export default function RecordManager() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 group/val">
-                          <code className="bg-muted px-2 py-0.5 rounded text-xs font-medium border border-border/50">{val}</code>
+                          <code className="bg-muted px-2 py-0.5 text-xs font-medium">{val}</code>
                           <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/val:opacity-100 transition-opacity" onClick={() => handleCopy(val)}>
                             <Copy className="h-3 w-3 text-muted-foreground" />
                           </Button>
