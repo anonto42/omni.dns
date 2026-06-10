@@ -17,11 +17,11 @@ import {
 
 const PAGE_SIZE = 25
 
-const statusConfig: Record<string, { className: string; label: string }> = {
-  forwarded: { className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', label: 'Allowed'  },
-  blocked:   { className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',          label: 'Blocked'  },
-  custom:    { className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',        label: 'Custom'   },
-  cached:    { className: 'bg-primary/10 text-primary',                                label: 'Cached'   },
+const statusConfig: Record<string, { className: string; label: string; accent: string; panelBg: string }> = {
+  forwarded: { className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', label: 'Allowed', accent: 'bg-emerald-500', panelBg: 'bg-emerald-500/[0.04]' },
+  blocked:   { className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',          label: 'Blocked', accent: 'bg-rose-500',    panelBg: 'bg-rose-500/[0.04]'    },
+  custom:    { className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',        label: 'Custom',  accent: 'bg-amber-500',   panelBg: 'bg-amber-500/[0.04]'   },
+  cached:    { className: 'bg-primary/10 text-primary',                                label: 'Cached',  accent: 'bg-primary',     panelBg: 'bg-primary/[0.04]'     },
 }
 
 function formatTs(ts: string, compact: boolean) {
@@ -195,7 +195,7 @@ export default function LogTable({ compact }: Props) {
                   <>
                     <TableRow
                       key={l.id}
-                      className={`group cursor-pointer transition-colors ${isOdd ? 'bg-muted/[0.15]' : ''} hover:bg-primary/5 ${isExpanded ? '!bg-primary/8 border-l-2 border-l-primary' : ''}`}
+                      className={`group cursor-pointer transition-colors ${isOdd && !isExpanded ? 'bg-muted/[0.15]' : ''} hover:bg-muted/30 ${isExpanded ? config.panelBg : ''}`}
                       onClick={() => !compact && setExpanded(isExpanded ? null : (l.id ?? null))}
                     >
                       <TableCell className="font-mono text-[11px] text-muted-foreground whitespace-nowrap pl-4">
@@ -246,58 +246,60 @@ export default function LogTable({ compact }: Props) {
 
                     {/* Expanded detail panel */}
                     {isExpanded && !compact && (
-                      <TableRow key={`${l.id}-detail`} className="hover:bg-transparent">
-                        <TableCell colSpan={6} className="p-0">
-                          <div className="mx-4 mb-3 border-l-2 border-primary/40 bg-muted/30 rounded-r-md overflow-hidden">
-                            {/* Header strip */}
-                            <div className="flex items-center justify-between px-4 py-2 bg-primary/5 border-b border-primary/10">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Query Detail · #{l.id}</span>
-                              <span className={`inline-flex items-center uppercase text-[9px] font-bold px-2 py-0.5 tracking-wider ${config.className}`}>
-                                {config.label}
-                              </span>
+                      <TableRow key={`${l.id}-detail`} className={`hover:bg-transparent ${config.panelBg}`}>
+                        <TableCell colSpan={6} className="px-4 pt-0 pb-4">
+                          {/* Accent bar — action color, full width, flush top */}
+                          <div className={`h-0.5 w-full ${config.accent} opacity-40 mb-3`} />
+
+                          <div className={`${config.panelBg} bg-muted/20`}>
+                            {/* Top row: meta fields */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4">
+                              {[
+                                { label: 'Query ID',    value: `#${l.id}` },
+                                { label: 'Timestamp',   value: new Date(l.timestamp || '').toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) },
+                                { label: 'Client IP',   value: l.client_ip || '—' },
+                                { label: 'MAC Address', value: l.mac_address || '—' },
+                              ].map(field => (
+                                <div key={field.label} className="px-4 py-3">
+                                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{field.label}</p>
+                                  <p className="font-mono text-[11px] text-foreground">{field.value}</p>
+                                </div>
+                              ))}
                             </div>
 
-                            {/* Detail grid */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-muted/50">
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Timestamp</p>
-                                <p className="font-mono text-[11px] text-foreground leading-snug">{new Date(l.timestamp || '').toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</p>
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Client IP</p>
-                                <p className="font-mono text-[11px] text-foreground">{l.client_ip || '—'}</p>
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">MAC Address</p>
-                                <p className="font-mono text-[11px] text-foreground">{l.mac_address || '—'}</p>
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Record Type</p>
-                                <p className="font-mono text-[11px] text-foreground font-bold">{guessType(l.domain || '')}</p>
-                              </div>
-                            </div>
-
-                            {/* Domain + action strip */}
-                            <div className="px-4 py-3 border-t border-muted/50 flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">Domain</p>
-                                <code className={`font-mono text-[12px] font-semibold truncate ${l.action === 'blocked' ? 'text-destructive' : 'text-foreground'}`}>{l.domain}</code>
+                            {/* Bottom row: domain + type + action + link */}
+                            <div className="bg-muted/20 px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                                {/* Record type pill */}
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 px-2 py-1 shrink-0">
+                                  {guessType(l.domain || '')}
+                                </span>
+                                {/* Domain */}
+                                <span className={`font-mono text-[12px] font-semibold truncate ${l.action === 'blocked' ? 'text-destructive' : 'text-foreground'}`}>
+                                  {l.domain}
+                                </span>
+                                {/* Copy */}
                                 <Button
                                   variant="ghost" size="icon"
-                                  className="h-6 w-6 shrink-0"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                                   onClick={e => { e.stopPropagation(); copyToClipboard(l.domain || '') }}
                                 >
-                                  <Copy className="h-3 w-3 text-muted-foreground" />
+                                  <Copy className="h-3 w-3" />
                                 </Button>
+                                {/* Status badge */}
+                                <span className={`inline-flex items-center uppercase text-[9px] font-bold px-2 py-0.5 tracking-wider shrink-0 ${config.className}`}>
+                                  {config.label}
+                                </span>
                               </div>
+                              {/* VirusTotal */}
                               <a
                                 href={`https://www.virustotal.com/gui/domain/${l.domain}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
-                                className="text-[9px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 flex items-center gap-1.5 shrink-0"
+                                className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground flex items-center gap-1.5 shrink-0 transition-colors"
                               >
-                                <ExternalLink className="h-3 w-3" /> Check on VirusTotal
+                                <ExternalLink className="h-3 w-3" /> VirusTotal
                               </a>
                             </div>
                           </div>
