@@ -54,7 +54,7 @@ func (h *Handler) HandleUDP(conn *net.UDPConn, client *net.UDPAddr, data []byte)
 		return
 	}
 
-	respMsg, _ := h.handle(msg, client.IP.String())
+	respMsg, _ := h.handle(msg, client.IP.String(), "UDP")
 	if respMsg == nil {
 		return
 	}
@@ -76,7 +76,7 @@ func (h *Handler) HandleTCP(conn net.Conn, data []byte, clientIP string) {
 		return
 	}
 
-	respMsg, _ := h.handle(msg, clientIP)
+	respMsg, _ := h.handle(msg, clientIP, "TCP")
 	if respMsg == nil {
 		return
 	}
@@ -96,16 +96,32 @@ func (h *Handler) HandleTCP(conn net.Conn, data []byte, clientIP string) {
 	}
 }
 
-func extractFirstA(answers []dns.RR) string {
+// extractAnswerInfo pulls resolved IPs, answer count, TTL, and all-answers string from DNS response records.
+func extractAnswerInfo(answers []dns.RR) (firstIP string, allAnswers string, count int, ttl uint32) {
+	var ips []string
 	for _, rr := range answers {
-		if a, ok := rr.(*dns.A); ok {
-			return a.A.String()
+		switch r := rr.(type) {
+		case *dns.A:
+			ips = append(ips, r.A.String())
+			if ttl == 0 {
+				ttl = r.Hdr.Ttl
+			}
+		case *dns.AAAA:
+			ips = append(ips, r.AAAA.String())
+			if ttl == 0 {
+				ttl = r.Hdr.Ttl
+			}
 		}
 	}
-	return ""
+	if len(ips) > 0 {
+		firstIP = ips[0]
+		allAnswers = strings.Join(ips, ",")
+		count = len(ips)
+	}
+	return
 }
 
-func (h *Handler) handle(msg *dns.Msg, clientIP string) (*dns.Msg, models.Action) {
+func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, models.Action) {
 	if len(msg.Question) == 0 {
 		return nil, ""
 	}
@@ -115,38 +131,73 @@ func (h *Handler) handle(msg *dns.Msg, clientIP string) (*dns.Msg, models.Action
 	qtype := question.Qtype
 	qtypeStr := dns.TypeToString[qtype]
 
-	slog.Debug("dns query", "domain", domain, "qtype", qtypeStr, "client", clientIP)
+	slog.Debug("dns query", "domain", domain, "qtype", qtypeStr, "client", clientIP, "proto", protocol)
+
+	base := models.QueryLog{
+		Domain:    domain,
+		ClientIP:  clientIP,
+		Protocol:  protocol,
+		QueryType: qtypeStr,
+	}
 
 	if h.db.IsBlocked(domain) {
-		h.db.LogQuery(domain, clientIP, models.ActionBlocked, qtypeStr, blockedIPResp, 0)
+		entry := base
+		entry.Action = models.ActionBlocked
+		entry.ResponseCode = "BLOCKED"
+		entry.ResolvedIP = blockedIPResp
+		entry.AllAnswers = blockedIPResp
+		entry.AnswerCount = 1
+		h.db.LogQuery(entry)
 		return h.buildResponse(msg, blockedIPResp, 60, h.blockNX), models.ActionBlocked
 	}
 
 	if ip := h.db.GetCustomRecord(domain); ip != "" {
 		if qtype == dns.TypeA {
-			h.db.LogQuery(domain, clientIP, models.ActionCustom, qtypeStr, ip, 0)
+			entry := base
+			entry.Action = models.ActionCustom
+			entry.ResponseCode = "NOERROR"
+			entry.ResolvedIP = ip
+			entry.AllAnswers = ip
+			entry.AnswerCount = 1
+			entry.TTL = 300
+			h.db.LogQuery(entry)
 			return h.buildResponse(msg, ip, 300, false), models.ActionCustom
 		}
 	}
 
 	if cached := h.cache.Get(domain); cached != nil {
 		if qtype == dns.TypeA {
-			h.db.LogQuery(domain, clientIP, models.ActionCached, qtypeStr, cached.IP, 0)
+			entry := base
+			entry.Action = models.ActionCached
+			entry.ResponseCode = "NOERROR"
+			entry.ResolvedIP = cached.IP
+			entry.AllAnswers = cached.IP
+			entry.AnswerCount = 1
+			entry.TTL = cached.TTL
+			h.db.LogQuery(entry)
 			return h.buildResponse(msg, cached.IP, cached.TTL, cached.NXDOMAIN), models.ActionCached
 		}
 	}
 
+	upstream := h.forwarder.CurrentUpstream()
 	start := time.Now()
 	response, err := h.forwarder.Forward(msg)
 	latencyMs := float64(time.Since(start).Microseconds()) / 1000.0
+
 	if err != nil {
-		h.db.LogQuery(domain, clientIP, models.ActionError, qtypeStr, "", latencyMs)
+		entry := base
+		entry.Action = models.ActionError
+		entry.ResponseCode = "SERVFAIL"
+		entry.UpstreamResolver = upstream
+		entry.LatencyMs = latencyMs
+		h.db.LogQuery(entry)
 		resp := new(dns.Msg)
 		resp.SetRcode(msg, dns.RcodeServerFailure)
 		return resp, models.ActionError
 	}
 
-	resolvedIP := extractFirstA(response.Answer)
+	firstIP, allAnswers, answerCount, ttl := extractAnswerInfo(response.Answer)
+	rcodeStr := dns.RcodeToString[response.Rcode]
 
 	if response.Rcode == dns.RcodeNameError {
 		h.cache.SetNXDOMAIN(domain)
@@ -159,7 +210,16 @@ func (h *Handler) handle(msg *dns.Msg, clientIP string) (*dns.Msg, models.Action
 		}
 	}
 
-	h.db.LogQuery(domain, clientIP, models.ActionForwarded, qtypeStr, resolvedIP, latencyMs)
+	entry := base
+	entry.Action = models.ActionForwarded
+	entry.ResponseCode = rcodeStr
+	entry.ResolvedIP = firstIP
+	entry.AllAnswers = allAnswers
+	entry.AnswerCount = answerCount
+	entry.TTL = ttl
+	entry.UpstreamResolver = upstream
+	entry.LatencyMs = latencyMs
+	h.db.LogQuery(entry)
 	return response, models.ActionForwarded
 }
 

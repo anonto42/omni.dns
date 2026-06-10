@@ -13,15 +13,21 @@ const (
 )
 
 type QueryLog struct {
-	ID          int64     `json:"id" example:"1"`
-	Timestamp   time.Time `json:"timestamp" example:"2024-10-25T10:00:00Z"`
-	Domain      string    `json:"domain" example:"example.com"`
-	ClientIP    string    `json:"client_ip" example:"192.168.1.5"`
-	MACAddress  string    `json:"mac_address" example:"aa:bb:cc:dd:ee:ff"`
-	Action      Action    `json:"action" example:"forwarded"`
-	QueryType   string    `json:"query_type" example:"A"`
-	ResolvedIP  string    `json:"resolved_ip" example:"93.184.216.34"`
-	LatencyMs   float64   `json:"latency_ms" example:"12.5"`
+	ID               int64     `json:"id" example:"1"`
+	Timestamp        time.Time `json:"timestamp" example:"2024-10-25T10:00:00Z"`
+	Domain           string    `json:"domain" example:"example.com"`
+	ClientIP         string    `json:"client_ip" example:"192.168.1.5"`
+	MACAddress       string    `json:"mac_address" example:"aa:bb:cc:dd:ee:ff"`
+	Action           Action    `json:"action" example:"forwarded"`
+	Protocol         string    `json:"protocol" example:"UDP"`
+	QueryType        string    `json:"query_type" example:"A"`
+	ResponseCode     string    `json:"response_code" example:"NOERROR"`
+	ResolvedIP       string    `json:"resolved_ip" example:"93.184.216.34"`
+	AllAnswers       string    `json:"all_answers" example:"93.184.216.34,93.184.216.35"`
+	AnswerCount      int       `json:"answer_count" example:"2"`
+	TTL              uint32    `json:"ttl" example:"300"`
+	UpstreamResolver string    `json:"upstream_resolver" example:"1.1.1.1:53"`
+	LatencyMs        float64   `json:"latency_ms" example:"12.5"`
 }
 
 type CustomRecord struct {

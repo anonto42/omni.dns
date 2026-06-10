@@ -40,6 +40,21 @@ func NewPooledForwarder(upstreams []Upstream) *PooledForwarder {
 	return f
 }
 
+// CurrentUpstream returns the address of the first healthy upstream, for logging purposes.
+func (f *PooledForwarder) CurrentUpstream() string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	for i, up := range f.upstreams {
+		if f.healthy[i] {
+			return up.Addr
+		}
+	}
+	if len(f.upstreams) > 0 {
+		return f.upstreams[0].Addr
+	}
+	return ""
+}
+
 func (f *PooledForwarder) Forward(req *dns.Msg) (*dns.Msg, error) {
 	var lastErr error
 	for i := range f.upstreams {

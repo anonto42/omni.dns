@@ -252,7 +252,7 @@ export default function LogTable({ compact }: Props) {
                           <div className={`h-0.5 w-full ${config.accent} opacity-40 mb-3`} />
 
                           <div className={`${config.panelBg} bg-muted/20`}>
-                            {/* Top row: meta fields */}
+                            {/* Row 1: client info */}
                             <div className="grid grid-cols-2 sm:grid-cols-4">
                               {[
                                 { label: 'Query ID',    value: `#${l.id}` },
@@ -267,11 +267,42 @@ export default function LogTable({ compact }: Props) {
                               ))}
                             </div>
 
-                            {/* Second row: resolved IP, latency */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/30">
+                            {/* Row 2: query details */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
+                              {[
+                                { label: 'Query Type',    value: l.query_type || '—' },
+                                { label: 'Protocol',      value: l.protocol || '—' },
+                                { label: 'Response Code', value: l.response_code || '—' },
+                                { label: 'Answer Count',  value: l.answer_count != null ? String(l.answer_count) : '—' },
+                              ].map(field => (
+                                <div key={field.label} className="px-4 py-3">
+                                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{field.label}</p>
+                                  <p className="font-mono text-[11px] text-foreground">{field.value}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Row 3: resolution info */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
                               <div className="px-4 py-3">
                                 <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Resolved IP</p>
                                 <p className="font-mono text-[11px] text-foreground">{l.resolved_ip || '—'}</p>
+                              </div>
+                              <div className="px-4 py-3 sm:col-span-2">
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">All Answers</p>
+                                <p className="font-mono text-[11px] text-foreground break-all">{l.all_answers || '—'}</p>
+                              </div>
+                              <div className="px-4 py-3">
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">TTL</p>
+                                <p className="font-mono text-[11px] text-foreground">{l.ttl != null && l.ttl > 0 ? `${l.ttl}s` : '—'}</p>
+                              </div>
+                            </div>
+
+                            {/* Row 4: upstream + latency */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
+                              <div className="px-4 py-3 sm:col-span-2">
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Upstream Resolver</p>
+                                <p className="font-mono text-[11px] text-foreground">{l.upstream_resolver || '—'}</p>
                               </div>
                               <div className="px-4 py-3">
                                 <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Latency</p>
@@ -282,7 +313,7 @@ export default function LogTable({ compact }: Props) {
                             </div>
 
                             {/* Bottom row: domain + type + action + link */}
-                            <div className="bg-muted/20 px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+                            <div className="bg-muted/20 px-4 py-3 flex flex-wrap items-center justify-between gap-4 border-t border-muted/20">
                               <div className="flex items-center gap-4 min-w-0 flex-1">
                                 {/* Record type pill */}
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 px-2 py-1 shrink-0">

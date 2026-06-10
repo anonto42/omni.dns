@@ -425,6 +425,10 @@ export interface components {
         "models.QueryLog": {
             /** @example forwarded */
             action?: components["schemas"]["models.Action"];
+            /** @example 93.184.216.34,93.184.216.35 */
+            all_answers?: string;
+            /** @example 2 */
+            answer_count?: number;
             /** @example 192.168.1.5 */
             client_ip?: string;
             /** @example example.com */
@@ -435,12 +439,20 @@ export interface components {
             latency_ms?: number;
             /** @example aa:bb:cc:dd:ee:ff */
             mac_address?: string;
+            /** @example UDP */
+            protocol?: string;
             /** @example A */
             query_type?: string;
+            /** @example NOERROR */
+            response_code?: string;
             /** @example 93.184.216.34 */
             resolved_ip?: string;
             /** @example 2024-10-25T10:00:00Z */
             timestamp?: string;
+            /** @example 300 */
+            ttl?: number;
+            /** @example 1.1.1.1:53 */
+            upstream_resolver?: string;
         };
         "models.RemoveBlockRequest": {
             /** @example ads.example.com */
