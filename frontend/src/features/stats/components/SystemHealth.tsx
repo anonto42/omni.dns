@@ -73,7 +73,7 @@ export const SystemHealth: React.FC = () => {
     : 'Checking…'
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm h-full flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg font-bold tracking-tight text-foreground mt-2 ml-2">System Health</CardTitle>
       </CardHeader>

@@ -50,18 +50,25 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-async function exportLogsCSV() {
-  const logs = await apiGet<Array<{ id: number; timestamp: string; domain: string; client_ip: string; action: string }>>('/logs?limit=1000')
+async function exportLogsCSV(last24h: boolean) {
+  const cutoff = last24h ? new Date(Date.now() - 86400_000).toISOString() : undefined
+  const logs = await apiGet<Array<{ id: number; timestamp: string; domain: string; client_ip: string; action: string }>>('/logs?limit=5000')
+  const filtered = cutoff ? logs.filter(l => l.timestamp >= cutoff) : logs
+  if (filtered.length === 0) {
+    toast.info('No logs to export', { description: last24h ? 'No queries in the last 24 hours.' : 'No query logs found.' })
+    return
+  }
   const header = 'id,timestamp,domain,client_ip,action'
-  const rows = logs.map(l => `${l.id},${l.timestamp},${l.domain},${l.client_ip},${l.action}`)
+  const rows = filtered.map(l => `${l.id},${l.timestamp},${l.domain},${l.client_ip},${l.action}`)
   const csv = [header, ...rows].join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `netshield-logs-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `netshield-logs-${new Date().toISOString().slice(0, 10)}${last24h ? '-24h' : ''}.csv`
   a.click()
   URL.revokeObjectURL(url)
+  toast.success('Report exported', { description: `${filtered.length} entries downloaded.` })
 }
 
 // Page wrapper with enter animation
@@ -237,41 +244,61 @@ function NetworkLoadChart() {
   )
 }
 
-const Dashboard = () => (
-  <PageTransition>
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Network Overview</h2>
-          <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Real-time monitoring for your DNS server.</p>
+const Dashboard = () => {
+  const [last24h, setLast24h] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try { await exportLogsCSV(last24h) } finally { setExporting(false) }
+  }
+
+  return (
+    <PageTransition>
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">Network Overview</h2>
+            <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Real-time monitoring for your DNS server.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={last24h ? 'default' : 'outline'}
+              size="sm"
+              className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm"
+              onClick={() => setLast24h(v => !v)}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              {last24h ? 'Last 24 Hours ✓' : 'Last 24 Hours'}
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 shadow-sm text-[10px] font-bold uppercase tracking-widest"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? 'Exporting…' : 'Export Report'}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-sm">
-            <Calendar className="h-3.5 w-3.5" />
-            Last 24 Hours
-          </Button>
-          <Button size="sm" className="gap-2 shadow-sm text-[10px] font-bold uppercase tracking-widest" onClick={exportLogsCSV}>
-            <Download className="h-3.5 w-3.5" />
-            Export Report
-          </Button>
+
+        <StatsCards />
+
+        <NetworkLoadChart />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+          <div className="lg:col-span-8 flex flex-col">
+            <LogTable compact />
+          </div>
+          <div className="lg:col-span-4 flex flex-col">
+            <SystemHealth />
+          </div>
         </div>
       </div>
-
-      <StatsCards />
-
-      <NetworkLoadChart />
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8">
-          <LogTable compact />
-        </div>
-        <div className="lg:col-span-4">
-          <SystemHealth />
-        </div>
-      </div>
-    </div>
-  </PageTransition>
-)
+    </PageTransition>
+  )
+}
 
 const LogsPage = () => (
   <PageTransition>

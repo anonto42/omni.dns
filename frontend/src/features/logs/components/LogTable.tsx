@@ -106,7 +106,7 @@ export default function LogTable({ compact }: Props) {
         onCancel={() => setConfirmClear(false)}
       />
 
-      <Card className="overflow-hidden shadow-sm">
+      <Card className={`overflow-hidden shadow-sm${compact ? ' h-full flex flex-col' : ''}`}>
         {!compact && (
           <CardHeader className="pb-4 bg-muted/5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

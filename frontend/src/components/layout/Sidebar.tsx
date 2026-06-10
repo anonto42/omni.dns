@@ -1,13 +1,12 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Server, 
-  Route as RouteIcon, 
-  Shield, 
-  ListTodo, 
-  Plus, 
-  Settings, 
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Server,
+  Route as RouteIcon,
+  Shield,
+  ListTodo,
+  Settings,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
@@ -33,7 +32,6 @@ const Logo = ({ collapsed }: { collapsed: boolean }) => (
 );
 
 export const SidebarContent: React.FC<{ collapsed?: boolean }> = ({ collapsed = false }) => {
-  const navigate = useNavigate();
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/records', label: 'DNS Records', icon: Server },
@@ -73,17 +71,6 @@ export const SidebarContent: React.FC<{ collapsed?: boolean }> = ({ collapsed = 
       </nav>
 
       <div className="px-3 mt-auto space-y-1">
-        <Button
-          onClick={() => navigate('/records')}
-          className={cn(
-            "w-full rounded-md flex items-center h-10 mb-2 hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200",
-            collapsed ? "justify-center p-0" : "gap-2 justify-start px-3"
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          {!collapsed && <span className="font-semibold text-xs uppercase tracking-widest">Add New Zone</span>}
-        </Button>
-
         <NavLink
           to="/settings"
           className={({ isActive }) => cn(

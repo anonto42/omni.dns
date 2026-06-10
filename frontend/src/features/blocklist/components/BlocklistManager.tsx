@@ -239,13 +239,6 @@ export default function BlocklistManager() {
             </Card>
           )}
 
-          <Card className="relative h-[240px] overflow-hidden group border border-primary/20 bg-primary/5 shadow-sm transition-transform duration-300 hover:scale-[1.01]">
-            <div className="absolute inset-0 bg-gradient-to-t from-card/90 via-card/40 to-transparent flex flex-col justify-end p-6">
-              <Badge variant="outline" className="w-fit mb-2 text-primary border-primary/30 bg-primary/10 text-[10px] font-bold uppercase tracking-widest">Network Insights</Badge>
-              <h4 className="text-foreground font-bold text-lg leading-snug mb-1.5">Protect your fleet with AI-driven threat intelligence.</h4>
-              <p className="text-muted-foreground text-sm">Automated updates for over 2M malicious domains.</p>
-            </div>
-          </Card>
         </div>
 
         <Card className="lg:col-span-8 overflow-hidden shadow-sm">
