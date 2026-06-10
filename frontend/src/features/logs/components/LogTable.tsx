@@ -188,7 +188,7 @@ export default function LogTable({ compact }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/20 border-b border-border/50">
-                <TableHead className="w-[180px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timestamp</TableHead>
+                <TableHead className="w-[200px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timestamp</TableHead>
                 {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Client</TableHead>}
                 <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Domain</TableHead>
                 {!compact && <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Type</TableHead>}
@@ -220,10 +220,10 @@ export default function LogTable({ compact }: Props) {
                   const ClientIcon = getClientIcon(l.client_ip || '')
                   return (
                     <TableRow key={l.id} className="group transition-colors hover:bg-muted/50 animate-in fade-in slide-in-from-bottom-1 duration-200">
-                      <TableCell className="font-mono text-[10px] text-muted-foreground/80">
+                      <TableCell className="font-mono text-[10px] text-muted-foreground/80 whitespace-nowrap">
                         {compact
                           ? new Date(l.timestamp || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                          : new Date(l.timestamp || '').toLocaleString()
+                          : new Date(l.timestamp || '').toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
                         }
                       </TableCell>
                       {!compact && (
