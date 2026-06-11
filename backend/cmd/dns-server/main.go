@@ -174,10 +174,10 @@ func main() {
 
 	if isEmbedded() {
 		slog.Info("serving embedded static files")
-		r.Handle("/*", http.FileServer(getFileSystem()))
+		r.Handle("/*", spaFileServer(getFileSystem()))
 	} else if *staticDir != "" {
 		slog.Info("serving static files", "dir", *staticDir)
-		fileServer(r, "/", http.Dir(*staticDir))
+		r.Handle("/*", spaFileServer(http.Dir(*staticDir)))
 	}
 
 	httpServer := &http.Server{
@@ -242,6 +242,7 @@ func handleTCPConn(conn *net.TCPConn, handler *dns.Handler) {
 	handler.HandleTCP(conn, data, clientIP)
 }
 
+// fileServer is kept for reference but no longer used in main.
 func fileServer(r chi.Router, path string, root http.FileSystem) {
 	if strings.ContainsAny(path, "{}*") {
 		panic("FileServer does not permit any URL parameters.")
@@ -258,6 +259,40 @@ func fileServer(r chi.Router, path string, root http.FileSystem) {
 		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
 		fs := http.StripPrefix(pathPrefix, http.FileServer(root))
 		fs.ServeHTTP(w, r)
+	})
+}
+
+// spaFileServer serves static assets normally; for any path that is not a
+// real file it falls back to index.html so that React Router can handle the
+// route client-side (fixes hard-reload 404 on paths like /steering).
+func spaFileServer(fs http.FileSystem) http.Handler {
+	fileServer := http.FileServer(fs)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to open the requested path
+		f, err := fs.Open(r.URL.Path)
+		if err != nil {
+			// Path does not exist as a file — serve index.html for SPA routing
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		defer f.Close()
+
+		// Path exists. If it's a directory without index.html, also fall back.
+		stat, err := f.Stat()
+		if err == nil && stat.IsDir() {
+			// Check for index.html inside the directory
+			idx, err2 := fs.Open(r.URL.Path + "/index.html")
+			if err2 != nil {
+				// No index.html in directory — serve root index.html
+				r.URL.Path = "/"
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			idx.Close()
+		}
+
+		fileServer.ServeHTTP(w, r)
 	})
 }
 
