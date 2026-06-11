@@ -279,12 +279,13 @@ export default function BlocklistManager() {
         <CardHeader className="pb-3 bg-muted/10 border-b border-border">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
+              <input
+                type="text"
                 value={search}
                 onChange={e => handleSearch(e.target.value)}
-                placeholder="Search domains…"
-                className="pl-9 h-9 text-xs input-premium w-full"
+                placeholder="Search domains..."
+                className="w-full bg-muted/30 pl-9 pr-4 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background transition-all duration-200"
               />
             </div>
             <Button

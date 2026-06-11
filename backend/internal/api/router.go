@@ -29,6 +29,7 @@ func RegisterRoutes(r chi.Router, database *db.DB, dnsHandler *dns.Handler) {
 		r.Delete("/session", h.Logout)
 		r.Put("/password", h.ChangePassword)
 		r.Get("/profile", h.GetProfile)
+		r.Put("/profile", h.UpdateProfile)
 		r.Get("/notifications", h.GetNotifications)
 		r.Put("/notifications/read", h.MarkNotificationsRead)
 		r.Delete("/notifications", h.DeleteNotifications)

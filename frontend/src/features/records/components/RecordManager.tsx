@@ -8,6 +8,7 @@ import {
   Copy,
   Trash2,
   ServerOff,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -65,6 +66,7 @@ export default function RecordManager() {
   const [ip, setIp] = useState('')
   const [recordType, setRecordType] = useState('A (IPv4 Address)')
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const loadRecords = useCallback(async () => {
     try {
@@ -117,19 +119,24 @@ export default function RecordManager() {
     }
   }
 
+  const entries = Object.entries(records || {})
+  const filteredEntries = entries.filter(([d, val]) =>
+    d.toLowerCase().includes(search.toLowerCase()) ||
+    val.toLowerCase().includes(search.toLowerCase())
+  )
+
   const handleExport = () => {
-    const entries = Object.entries(records)
-    if (entries.length === 0) return
-    const lines = entries.map(([d, v]) => `${d}\t${getTypeLabel(v)}\t${v}`).join('\n')
+    const dataToExport = search ? filteredEntries : entries
+    if (dataToExport.length === 0) return
+    const lines = dataToExport.map(([d, v]) => `${d}\t${getTypeLabel(v)}\t${v}`).join('\n')
     const blob = new Blob([lines], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = 'local-dns-records.txt'; a.click()
     URL.revokeObjectURL(url)
-    toast.success('Exported', { description: `${entries.length} records` })
+    toast.success('Exported', { description: `${dataToExport.length} records` })
   }
 
-  const entries = Object.entries(records || {})
   const ph = PLACEHOLDERS[recordType] || PLACEHOLDERS['A (IPv4 Address)']
 
   const renderSkeletonRows = () =>
@@ -282,22 +289,35 @@ export default function RecordManager() {
       {/* Records table */}
       <Card className="overflow-hidden shadow-sm glass-panel rounded-lg">
         <CardHeader className="pb-3 bg-muted/10 border-b border-border">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-foreground">Existing Local Records</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">
                 Authoritative records — these override upstream DNS for matching domains.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 text-[10px] font-bold uppercase tracking-widest shrink-0 btn-premium"
-              onClick={handleExport}
-              disabled={entries.length === 0}
-            >
-              <Download className="h-3.5 w-3.5" /> Export List
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* Search */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search records..."
+                  className="w-full bg-muted/30 pl-9 pr-4 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background transition-all duration-200"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-[10px] font-bold uppercase tracking-widest shrink-0 btn-premium"
+                onClick={handleExport}
+                disabled={filteredEntries.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" /> Export List
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -313,20 +333,22 @@ export default function RecordManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? renderSkeletonRows() : entries.length === 0 ? (
+              {loading ? renderSkeletonRows() : filteredEntries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-3 py-6 text-muted-foreground">
                       <ServerOff className="h-8 w-8 opacity-40 animate-pulse" />
                       <div>
-                        <p className="text-sm font-medium">No custom records yet</p>
-                        <p className="text-xs opacity-70 mt-1">Click "New Record" to add your first entry</p>
+                        <p className="text-sm font-medium">{search ? 'No matches found' : 'No custom records yet'}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {search ? 'Try adjusting your search query' : 'Click "New Record" to add your first entry'}
+                        </p>
                       </div>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                entries.map(([d, val], idx) => {
+                filteredEntries.map(([d, val], idx) => {
                   const type = getTypeLabel(val)
                   const style = recordTypeStyles[type] || recordTypeStyles.TXT
                   return (

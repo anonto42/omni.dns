@@ -105,7 +105,7 @@ func Open(path string) (*DB, error) {
 	}
 
 	queries := []string{
-		"CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT)",
+		"CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT, name TEXT DEFAULT 'Administrator')",
 		"CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT, created_at TEXT)",
 		"CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
 		"CREATE TABLE IF NOT EXISTS query_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, domain TEXT, client_ip TEXT, action TEXT, mac_address TEXT DEFAULT '', protocol TEXT DEFAULT '', query_type TEXT DEFAULT '', response_code TEXT DEFAULT '', resolved_ip TEXT DEFAULT '', all_answers TEXT DEFAULT '', answer_count INTEGER DEFAULT 0, ttl INTEGER DEFAULT 0, upstream_resolver TEXT DEFAULT '', latency_ms REAL DEFAULT 0)",
@@ -118,8 +118,8 @@ func Open(path string) (*DB, error) {
 			condition_value TEXT NOT NULL,
 			action_type     TEXT NOT NULL,
 			action_target   TEXT NOT NULL DEFAULT '',
-			priority        INTEGER NOT NULL DEFAULT 0,
-			enabled         INTEGER NOT NULL DEFAULT 1
+			priority        INTEGER DEFAULT 1,
+			enabled         INTEGER DEFAULT 1
 		)`,
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,6 +136,7 @@ func Open(path string) (*DB, error) {
 		}
 	}
 	// Migrate existing databases — ignore errors if columns already exist.
+	conn.Exec("ALTER TABLE users ADD COLUMN name TEXT DEFAULT 'Administrator'")
 	conn.Exec("ALTER TABLE query_logs ADD COLUMN mac_address TEXT DEFAULT ''")
 	conn.Exec("ALTER TABLE query_logs ADD COLUMN protocol TEXT DEFAULT ''")
 	conn.Exec("ALTER TABLE query_logs ADD COLUMN query_type TEXT DEFAULT ''")
@@ -610,5 +611,51 @@ func (db *DB) DeleteNotification(id int64) error {
 func (db *DB) ClearAllNotifications() error {
 	_, err := db.conn.Exec("DELETE FROM notifications")
 	return err
+}
+
+func (db *DB) GetProfile(email string) (string, error) {
+	var name string
+	err := db.conn.QueryRow("SELECT name FROM users WHERE email = ?", email).Scan(&name)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+func (db *DB) UpdateProfile(oldEmail, newEmail, name string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	
+	// If email changes, check if the new email is already in use by another user
+	if oldEmail != newEmail {
+		var count int
+		err = tx.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", newEmail).Scan(&count)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		if count > 0 {
+			tx.Rollback()
+			return fmt.Errorf("email %s is already in use", newEmail)
+		}
+	}
+
+	// Update users table
+	_, err = tx.Exec("UPDATE users SET email = ?, name = ? WHERE email = ?", newEmail, name, oldEmail)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Update sessions table so the active session maps to the new email
+	_, err = tx.Exec("UPDATE sessions SET email = ? WHERE email = ?", newEmail, oldEmail)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 

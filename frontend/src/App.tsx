@@ -24,6 +24,7 @@ import {
   Monitor,
   ChevronDown,
   Check,
+  Search,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -386,7 +387,7 @@ const Dashboard = () => {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowTimeDropdown(v => !v)}
-                className="flex items-center gap-2 px-4 h-9 text-[10px] font-bold uppercase tracking-wider rounded-md border border-border bg-card hover:bg-muted text-foreground transition-all duration-200 shadow-sm select-none cursor-pointer"
+                className="flex items-center gap-2 px-4 h-9 text-[10px] font-bold uppercase tracking-wider rounded-sm border border-border bg-card hover:bg-muted text-foreground transition-all duration-200 shadow-sm select-none cursor-pointer"
               >
                 {range.mode === 'live' ? (
                   <span className="relative flex h-2 w-2 mr-1">
@@ -401,7 +402,7 @@ const Dashboard = () => {
               </button>
 
               {showTimeDropdown && (
-                <div className="absolute right-0 top-full mt-2 z-50 glass-panel border border-border rounded-md shadow-xl p-2 w-[280px] space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 top-full mt-2 z-50 glass-panel border border-border rounded-sm shadow-xl p-2 w-[280px] space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-3 py-1.5 border-b border-border mb-1">Select Timeframe</p>
                   
                   {/* Presets */}
@@ -567,6 +568,7 @@ const SteeringPage = () => {
   const [actionType, setActionType] = useState('Forward')
   const [actionTarget, setActionTarget] = useState('')
   const [priority, setPriority] = useState(1)
+  const [search, setSearch] = useState('')
 
   const fetchRules = useCallback(async () => {
     try {
@@ -656,6 +658,12 @@ const SteeringPage = () => {
   }
 
   const activeCount = rules.filter(r => r.enabled).length
+
+  const filteredRules = rules.filter(r => 
+    r.name.toLowerCase().includes(search.toLowerCase()) ||
+    r.condition_value.toLowerCase().includes(search.toLowerCase()) ||
+    (r.action_target && r.action_target.toLowerCase().includes(search.toLowerCase()))
+  )
 
   const renderSkeletonRows = () =>
     Array.from({ length: 3 }).map((_, i) => (
@@ -783,7 +791,6 @@ const SteeringPage = () => {
           </div>
         </div>
       )}
-
       <div className="space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
@@ -825,16 +832,29 @@ const SteeringPage = () => {
         {/* Rules table */}
         <Card className="overflow-hidden shadow-sm glass-panel rounded-lg">
           <CardHeader className="pb-3 bg-muted/10 border-b border-border">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-foreground">Steering Rules</p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">
                   Evaluated in priority order — #1 runs first. Toggle to enable or disable without deleting.
                 </p>
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                {activeCount} active / {rules.length} total
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Search */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search rules..."
+                    className="w-full bg-muted/30 pl-9 pr-4 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background transition-all duration-200"
+                  />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground shrink-0">
+                  {activeCount} active / {rules.length} total
+                </span>
+              </div>
             </div>
           </CardHeader>
           <div className="overflow-x-auto">
@@ -850,19 +870,21 @@ const SteeringPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? renderSkeletonRows() : rules.length === 0 ? (
+                {loading ? renderSkeletonRows() : filteredRules.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-40 text-center">
                       <div className="flex flex-col items-center gap-3 py-6 text-muted-foreground">
                         <Globe className="h-8 w-8 opacity-40 animate-pulse" />
                         <div>
-                          <p className="text-sm font-medium">No steering rules yet</p>
-                          <p className="text-xs opacity-70 mt-1">Click "New Rule" to start routing DNS traffic</p>
+                          <p className="text-sm font-medium">{search ? 'No matches found' : 'No steering rules yet'}</p>
+                          <p className="text-xs opacity-70 mt-1">
+                            {search ? 'Try adjusting your search query' : 'Click "New Rule" to start routing DNS traffic'}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : rules.map((rule, idx) => (
+                ) : filteredRules.map((rule, idx) => (
                   <TableRow
                     key={rule.id}
                     className={`group transition-colors hover:bg-muted/20 border-b border-border ${idx % 2 === 1 ? 'bg-muted/[0.08]' : ''}`}
@@ -1092,27 +1114,63 @@ const SettingsPage = () => {
 }
 
 const ProfilePage = () => {
-  const { user } = useAuth()
+  const { user, updateProfile } = useAuth()
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.name || '')
+      setEmail(user.email || '')
+    }
+  }, [user])
+
+  const handleDiscard = () => {
+    if (user) {
+      setDisplayName(user.name || '')
+      setEmail(user.email || '')
+    }
+    setCurrentPw('')
+    setNewPw('')
+    setConfirmPw('')
+  }
+
   const handleSave = async () => {
-    if (newPw !== confirmPw) { toast.error('Passwords do not match'); return }
-    if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
+    const isChangingPassword = currentPw || newPw || confirmPw
+    if (isChangingPassword) {
+      if (newPw !== confirmPw) { toast.error('Passwords do not match'); return }
+      if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
+    }
+    if (!displayName.trim() || !email.trim()) {
+      toast.error('Display Name and Email cannot be empty')
+      return
+    }
+
     setSaving(true)
     try {
-      const res = await apiPut('/password', { current_password: currentPw, new_password: newPw }) as { ok?: boolean; error?: string }
-      if (res.ok) {
-        toast.success('Password changed successfully')
+      const profileChanged = displayName.trim() !== (user?.name || '') || email.trim().toLowerCase() !== (user?.email || '').toLowerCase()
+      if (profileChanged) {
+        await updateProfile(displayName.trim(), email.trim().toLowerCase())
+        toast.success('Profile updated successfully')
         dispatchNotificationsUpdate()
-        setCurrentPw(''); setNewPw(''); setConfirmPw('')
-      } else {
-        toast.error(res.error ?? 'Failed to change password')
       }
-    } catch {
-      toast.error('Network error — please try again')
+
+      if (isChangingPassword) {
+        const res = await apiPut('/password', { current_password: currentPw, new_password: newPw }) as { ok?: boolean; error?: string }
+        if (res.ok) {
+          toast.success('Password changed successfully')
+          dispatchNotificationsUpdate()
+          setCurrentPw(''); setNewPw(''); setConfirmPw('')
+        } else {
+          toast.error(res.error ?? 'Failed to change password')
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save changes')
     } finally {
       setSaving(false)
     }
@@ -1138,11 +1196,21 @@ const ProfilePage = () => {
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/40">
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-[11px]">Display Name</p>
-                <p className="text-sm font-bold text-foreground">{user?.name || 'Administrator'}</p>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  className="flex h-10 w-full sm:w-64 input-premium"
+                />
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2">
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-[11px]">Email Address</p>
-                <p className="text-sm font-bold text-foreground">{user?.email || 'admin@netshield.local'}</p>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="flex h-10 w-full sm:w-64 input-premium"
+                />
               </div>
             </CardContent>
           </Card>
@@ -1166,7 +1234,7 @@ const ProfilePage = () => {
             </CardContent>
           </Card>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest btn-premium" onClick={() => { setCurrentPw(''); setNewPw(''); setConfirmPw('') }}>Discard</Button>
+            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest btn-premium" onClick={handleDiscard}>Discard</Button>
             <Button className="shadow-sm text-[10px] font-bold uppercase tracking-widest btn-premium glow-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
           </div>
         </div>

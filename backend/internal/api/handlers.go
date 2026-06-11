@@ -415,10 +415,56 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		respond(w, 401, map[string]string{"error": "unauthorized"})
 		return
 	}
+	name, err := h.db.GetProfile(email)
+	if err != nil {
+		name = "Administrator" // fallback
+	}
 	respond(w, 200, map[string]string{
 		"email": email,
-		"name":  "Administrator",
+		"name":  name,
 	})
+}
+
+type UpdateProfileRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	oldEmail, ok := r.Context().Value(userKey).(string)
+	if !ok {
+		respond(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	var body UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respond(w, 400, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	body.Name = strings.TrimSpace(body.Name)
+	body.Email = strings.ToLower(strings.TrimSpace(body.Email))
+
+	if body.Name == "" || body.Email == "" {
+		respond(w, 400, map[string]string{"error": "name and email cannot be empty"})
+		return
+	}
+
+	if !strings.Contains(body.Email, "@") {
+		respond(w, 400, map[string]string{"error": "invalid email address"})
+		return
+	}
+
+	err := h.db.UpdateProfile(oldEmail, body.Email, body.Name)
+	if err != nil {
+		respond(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+
+	h.db.AddNotification("success", "Profile Updated", fmt.Sprintf("Account details updated: Name='%s', Email='%s'.", body.Name, body.Email))
+	respond(w, 200, map[string]bool{"ok": true})
 }
 
 func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {

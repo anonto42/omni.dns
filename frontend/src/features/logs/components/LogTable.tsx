@@ -116,12 +116,13 @@ export default function LogTable({ compact }: Props) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               {/* Left: search */}
               <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
+                <input
+                  type="text"
                   value={domainSearch}
                   onChange={e => handleDomainSearch(e.target.value)}
-                  placeholder="Filter by domain…"
-                  className="pl-8 h-8 text-xs w-full"
+                  placeholder="Filter by domain..."
+                  className="w-full bg-muted/30 pl-9 pr-4 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background transition-all duration-200"
                 />
               </div>
               {/* Right: filter pills + clear */}

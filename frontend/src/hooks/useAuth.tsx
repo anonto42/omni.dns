@@ -6,6 +6,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
+  updateProfile: (name: string, email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -53,6 +54,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateProfile = useCallback(async (name: string, email: string) => {
+    if (!token) return
+    const res = await fetch('/api/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ name, email }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'update profile failed' }))
+      throw new Error(err.error || 'update profile failed')
+    }
+    // Reload profile details
+    await fetchProfile(token)
+  }, [token, fetchProfile])
+
   useEffect(() => {
     const stored = localStorage.getItem('auth_token')
     if (stored) {
@@ -62,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile])
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ token, user, login, logout, isAuthenticated: !!token, updateProfile }}>
       {children}
     </AuthContext.Provider>
   )
