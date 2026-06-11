@@ -28,6 +28,7 @@ func RegisterRoutes(r chi.Router, database *db.DB, dnsHandler *dns.Handler) {
 		r.Put("/settings", h.SaveSettings)
 		r.Delete("/session", h.Logout)
 		r.Put("/password", h.ChangePassword)
+		r.Get("/profile", h.GetProfile)
 		r.Get("/steering", h.GetSteeringRules)
 		r.Post("/steering", h.AddSteeringRule)
 		r.Put("/steering", h.UpdateSteeringRule)

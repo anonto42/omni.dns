@@ -1092,6 +1092,7 @@ const SettingsPage = () => {
 }
 
 const ProfilePage = () => {
+  const { user } = useAuth()
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -1127,6 +1128,27 @@ const ProfilePage = () => {
         <div className="grid gap-6">
           <Card className="shadow-sm">
             <CardHeader>
+              <CardTitle className="font-bold tracking-tight text-foreground">Account Details</CardTitle>
+              <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Your dynamic NetShield account profile info.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/40">
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-[11px]">Account Type</p>
+                <p className="text-sm font-bold text-foreground">System Administrator</p>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border/40">
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-[11px]">Display Name</p>
+                <p className="text-sm font-bold text-foreground">{user?.name || 'Administrator'}</p>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2">
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider text-[11px]">Email Address</p>
+                <p className="text-sm font-bold text-foreground">{user?.email || 'admin@netshield.local'}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader>
               <CardTitle className="font-bold tracking-tight text-foreground">Change Password</CardTitle>
               <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Update your admin account password.</CardDescription>
             </CardHeader>
@@ -1153,69 +1175,6 @@ const ProfilePage = () => {
   )
 }
 
-const CloudSyncPage = () => {
-  const [autoSync, setAutoSync] = useState(true)
-  return (
-    <PageTransition>
-      <div className="space-y-8">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Cloud Sync</h1>
-          <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">Synchronize your configuration across nodes and clusters.</p>
-        </div>
-        <div className="grid gap-6">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-bold tracking-tight text-foreground">Sync Status</CardTitle>
-              <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Current synchronization state of your cluster.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-foreground">All nodes are in sync</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Last synchronized 2 hours ago</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-bold tracking-tight text-foreground">Sync Configuration</CardTitle>
-              <CardDescription className="text-[10px] font-bold uppercase tracking-widest">Configure automatic synchronization settings.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-foreground">Auto-Sync</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Automatically sync configuration changes</p>
-                </div>
-                <Switch checked={autoSync} onCheckedChange={setAutoSync} />
-              </div>
-              <div className="h-[1px] bg-muted" />
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-foreground">Sync Interval</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">How often to sync with remote nodes</p>
-                </div>
-                <select className="select-premium flex h-9 w-full sm:w-48 bg-muted px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-foreground">
-                  <option>Every 5 minutes</option>
-                  <option>Every 15 minutes</option>
-                  <option>Every hour</option>
-                  <option>Every 6 hours</option>
-                </select>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" className="text-[10px] font-bold uppercase tracking-widest cursor-pointer hover:bg-muted" onClick={() => { toast.info('Sync initiated'); addNotification('info', 'Cloud Sync Initiated', 'Manual synchronization with peer nodes started.'); }}>Sync Now</Button>
-            <Button className="shadow-sm text-[10px] font-bold uppercase tracking-widest cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 glow-primary" onClick={() => { toast.success('Cloud sync settings saved'); addNotification('success', 'Cloud Sync Configuration Saved', 'Updated automatic synchronization intervals and peer list.'); }}>Save Configuration</Button>
-          </div>
-        </div>
-      </div>
-    </PageTransition>
-  )
-}
-
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -1234,7 +1193,6 @@ function AnimatedRoutes() {
       <Route path="/steering" element={<SteeringPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/cloud-sync" element={<CloudSyncPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

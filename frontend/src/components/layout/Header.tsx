@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTheme, type Theme } from '../../hooks/useTheme';
+import { useAuth } from '../../hooks/useAuth';
 import { useLayout } from '../../hooks/useLayout';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,6 @@ const searchItems = [
   { path: '/settings', label: 'Upstream DNS', icon: Settings, keywords: 'upstream provider resolver cloudflare google' },
   { path: '/settings', label: 'Settings', icon: Settings, keywords: 'configuration preferences general' },
   { path: '/profile', label: 'Profile', icon: User, keywords: 'account profile email name' },
-  { path: '/cloud-sync', label: 'Cloud Sync', icon: Cloud, keywords: 'sync cloud backup cluster node' },
 ]
 
 const THEME_CYCLE: Theme[] = ['light', 'dark', 'system']
@@ -77,6 +77,7 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const { isSidebarCollapsed } = useLayout();
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<SystemNotification[]>(getNotifications())
 
   useEffect(() => {
@@ -351,8 +352,8 @@ export const Header: React.FC = () => {
           <DropdownMenuContent align="end" className="w-56 mt-2 shadow-md">
             <DropdownMenuLabel className="font-normal bg-muted/20">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-bold text-foreground leading-none">Enterprise User</p>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">admin@netshield.local</p>
+                <p className="text-sm font-bold text-foreground leading-none">{user?.name || 'Administrator'}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">{user?.email || 'admin@netshield.local'}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-muted" />
@@ -361,9 +362,6 @@ export const Header: React.FC = () => {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground focus:text-foreground">
               <Settings className="h-3.5 w-3.5" /> Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/cloud-sync')} className="cursor-pointer gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground focus:text-foreground">
-              <Cloud className="h-3.5 w-3.5" /> Cloud Sync
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-muted" />
             <DropdownMenuItem
@@ -376,7 +374,7 @@ export const Header: React.FC = () => {
                     headers: { Authorization: `Bearer ${token}` },
                   }).catch(() => {})
                 }
-                localStorage.removeItem('auth_token')
+                logout()
                 navigate('/login')
               }}
             >

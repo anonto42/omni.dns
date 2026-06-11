@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 
 interface AuthContextValue {
   token: string | null
+  user: { email: string; name: string } | null
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
@@ -11,6 +12,25 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'))
+  const [user, setUser] = useState<{ email: string; name: string } | null>(null)
+
+  const fetchProfile = useCallback(async (authToken: string) => {
+    try {
+      const res = await fetch('/api/profile', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setUser(data)
+      } else {
+        localStorage.removeItem('auth_token')
+        setToken(null)
+        setUser(null)
+      }
+    } catch {
+      // Fail silent on network error
+    }
+  }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch('/api/login', {
@@ -30,15 +50,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token')
     setToken(null)
+    setUser(null)
   }, [])
 
   useEffect(() => {
     const stored = localStorage.getItem('auth_token')
-    if (stored) setToken(stored)
-  }, [])
+    if (stored) {
+      setToken(stored)
+      fetchProfile(stored)
+    }
+  }, [fetchProfile])
 
   return (
-    <AuthContext.Provider value={{ token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ token, user, login, logout, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   )

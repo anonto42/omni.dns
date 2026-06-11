@@ -393,3 +393,15 @@ func (h *Handler) DeleteSteeringRule(w http.ResponseWriter, r *http.Request) {
 	h.db.DeleteSteeringRule(body.ID)
 	respond(w, 200, map[string]bool{"ok": true})
 }
+
+func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value(userKey).(string)
+	if !ok {
+		respond(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+	respond(w, 200, map[string]string{
+		"email": email,
+		"name":  "Administrator",
+	})
+}
