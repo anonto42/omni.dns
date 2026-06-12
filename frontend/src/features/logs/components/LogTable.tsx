@@ -1,19 +1,16 @@
-import { useState, useRef, useCallback } from 'react'
+import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Copy, ChevronLeft, ChevronRight, ChevronDown, Trash2, Search, FileX, ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
-import { getLogs, clearLogs, type QueryLog } from '../api'
-import { usePolling } from '../../../hooks/usePolling'
-import { useWindowFocus } from '../../../hooks/useWindowFocus'
+import { Copy, ChevronLeft, ChevronRight, ChevronDown, Trash2, Search, FileX } from 'lucide-react'
 import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { useLogTable } from '../hooks/useLogTable'
+import LogDetailRow from './LogDetailRow'
 
 const PAGE_SIZE = 25
 
@@ -40,46 +37,11 @@ interface Props { compact?: boolean }
 
 export default function LogTable({ compact }: Props) {
   const navigate = useNavigate()
-  const [logs, setLogs] = useState<QueryLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'blocked' | 'allowed' | 'cached'>('all')
-  const [domainSearch, setDomainSearch] = useState('')
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [pendingSearch, setPendingSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [confirmClear, setConfirmClear] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
-
-  const actionParam = filter === 'blocked' ? 'blocked' : filter === 'allowed' ? 'forwarded' : filter === 'cached' ? 'cached' : undefined
-
-  const fetchLogs = useCallback(async () => {
-    try {
-      const data = await getLogs({ action: actionParam, domain: pendingSearch || undefined, limit: 500 })
-      if (data) { setLogs(data); setLoading(false) }
-    } catch { setLoading(false) }
-  }, [actionParam, pendingSearch])
-
-  usePolling(fetchLogs, 3000, [actionParam, pendingSearch])
-  useWindowFocus(fetchLogs)
-
-  const handleDomainSearch = (val: string) => {
-    setDomainSearch(val)
-    setPage(1)
-    if (searchTimeout.current) clearTimeout(searchTimeout.current)
-    searchTimeout.current = setTimeout(() => setPendingSearch(val), 400)
-  }
-
-  const handleFilterChange = (f: typeof filter) => { setFilter(f); setPage(1) }
-
-  const handleClear = async () => {
-    try {
-      await clearLogs()
-      setLogs([]); setPage(1)
-      toast.success('Logs cleared', { description: 'All query logs have been removed.' })
-    } catch {
-      toast.error('Failed to clear logs', { description: 'Please try again.' })
-    }
-  }
+  const {
+    logs, loading, filter, domainSearch, pendingSearch, page, setPage,
+    confirmClear, setConfirmClear, expanded, setExpanded,
+    handleDomainSearch, handleFilterChange, handleClear,
+  } = useLogTable(compact)
 
   const totalPages = Math.max(1, Math.ceil(logs.length / PAGE_SIZE))
   const pageLogs = logs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -110,11 +72,9 @@ export default function LogTable({ compact }: Props) {
       />
 
       <Card data-tour="query-logs-list" className={`overflow-hidden shadow-sm${compact ? ' h-full flex flex-col' : ''}`}>
-        {/* Full page header — two-container toolbar, no title */}
         {!compact && (
           <CardHeader className="pb-3 bg-muted/5">
             <div className="flex flex-col gap-3">
-              {/* Search - always full width */}
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
                 <input
@@ -125,7 +85,6 @@ export default function LogTable({ compact }: Props) {
                   className="w-full bg-muted/30 pl-9 pr-4 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background transition-all duration-200"
                 />
               </div>
-              {/* Filter pills + clear */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-wrap bg-muted/50 p-1 gap-0.5">
                   {(['all', 'allowed', 'blocked', 'cached'] as const).map((f) => (
@@ -153,7 +112,6 @@ export default function LogTable({ compact }: Props) {
           </CardHeader>
         )}
 
-        {/* Compact (dashboard) header */}
         {compact && (
           <CardHeader className="pb-4 flex flex-row items-center justify-between bg-muted/5">
             <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-foreground">Recent Queries</CardTitle>
@@ -193,9 +151,8 @@ export default function LogTable({ compact }: Props) {
                 const isExpanded = l.id != null && expanded === l.id
                 const isOdd = idx % 2 === 1
                 return (
-                  <>
+                  <React.Fragment key={l.id ?? idx}>
                     <TableRow
-                      key={l.id}
                       className={`group cursor-pointer transition-colors ${isOdd && !isExpanded ? 'bg-muted/[0.15]' : ''} hover:bg-muted/30 ${isExpanded ? config.panelBg : ''}`}
                       onClick={() => !compact && setExpanded(isExpanded ? null : (l.id ?? null))}
                     >
@@ -224,7 +181,7 @@ export default function LogTable({ compact }: Props) {
                             className="h-5 w-5 opacity-0 group-hover/cell:opacity-100 transition-opacity shrink-0"
                             onClick={e => { e.stopPropagation(); copyToClipboard(l.domain || '') }}
                           >
-                            <Copy className="h-3 w-3 text-muted-foreground" />
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
                         </div>
                       </TableCell>
@@ -245,114 +202,15 @@ export default function LogTable({ compact }: Props) {
                       </TableCell>
                     </TableRow>
 
-                    {/* Expanded detail panel */}
                     {isExpanded && !compact && (
-                      <TableRow key={`${l.id}-detail`} className={`hover:bg-transparent ${config.panelBg}`}>
+                      <TableRow className={`hover:bg-transparent ${config.panelBg}`}>
                         <TableCell colSpan={6} className="px-4 pt-0 pb-4">
-                          {/* Accent bar — action color, full width, flush top */}
                           <div className={`h-0.5 w-full ${config.accent} opacity-40 mb-3`} />
-
-                          <div className={`${config.panelBg} bg-muted/20`}>
-                            {/* Row 1: client info */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4">
-                              {[
-                                { label: 'Query ID',    value: `#${l.id}` },
-                                { label: 'Timestamp',   value: new Date(l.timestamp || '').toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) },
-                                { label: 'Client IP',   value: l.client_ip || '—' },
-                                { label: 'MAC Address', value: l.mac_address || '—' },
-                              ].map(field => (
-                                <div key={field.label} className="px-4 py-3">
-                                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{field.label}</p>
-                                  <p className="font-mono text-[11px] text-foreground">{field.value}</p>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Row 2: query details */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
-                              {[
-                                { label: 'Query Type',    value: l.query_type || '—' },
-                                { label: 'Protocol',      value: l.protocol || '—' },
-                                { label: 'Response Code', value: l.response_code || '—' },
-                                { label: 'Answer Count',  value: l.answer_count != null ? String(l.answer_count) : '—' },
-                              ].map(field => (
-                                <div key={field.label} className="px-4 py-3">
-                                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{field.label}</p>
-                                  <p className="font-mono text-[11px] text-foreground">{field.value}</p>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Row 3: resolution info */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Resolved IP</p>
-                                <p className="font-mono text-[11px] text-foreground">{l.resolved_ip || '—'}</p>
-                              </div>
-                              <div className="px-4 py-3 sm:col-span-2">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">All Answers</p>
-                                <p className="font-mono text-[11px] text-foreground break-all">{l.all_answers || '—'}</p>
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">TTL</p>
-                                <p className="font-mono text-[11px] text-foreground">{l.ttl != null && l.ttl > 0 ? `${l.ttl}s` : '—'}</p>
-                              </div>
-                            </div>
-
-                            {/* Row 4: upstream + latency */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-muted/20">
-                              <div className="px-4 py-3 sm:col-span-2">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Upstream Resolver</p>
-                                <p className="font-mono text-[11px] text-foreground">{l.upstream_resolver || '—'}</p>
-                              </div>
-                              <div className="px-4 py-3">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Latency</p>
-                                <p className="font-mono text-[11px] text-foreground">
-                                  {l.latency_ms != null && l.latency_ms > 0 ? `${l.latency_ms.toFixed(1)} ms` : '—'}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Bottom row: domain + type + action + link */}
-                            <div className="bg-muted/20 px-4 py-3 flex flex-wrap items-center justify-between gap-4 border-t border-muted/20">
-                              <div className="flex items-center gap-4 min-w-0 flex-1">
-                                {/* Record type pill */}
-                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/60 px-2 py-1 shrink-0">
-                                  {l.query_type || guessType(l.domain || '')}
-                                </span>
-                                {/* Domain */}
-                                <span className={`font-mono text-[12px] font-semibold truncate ${l.action === 'blocked' ? 'text-destructive' : 'text-foreground'}`}>
-                                  {l.domain}
-                                </span>
-                                {/* Copy */}
-                                <Button
-                                  variant="ghost" size="icon"
-                                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                                  onClick={e => { e.stopPropagation(); copyToClipboard(l.domain || '') }}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                                {/* Status badge */}
-                                <span className={`inline-flex items-center uppercase text-[9px] font-bold px-2 py-0.5 tracking-wider shrink-0 ${config.className}`}>
-                                  {config.label}
-                                </span>
-                              </div>
-                              {/* VirusTotal */}
-                              <a
-                                href={`https://www.virustotal.com/gui/domain/${l.domain}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={e => e.stopPropagation()}
-                                className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground flex items-center gap-1.5 shrink-0 transition-colors"
-                              >
-                                <ExternalLink className="h-3 w-3" /> VirusTotal
-                              </a>
-                            </div>
-                          </div>
+                          <LogDetailRow log={l} config={config} guessType={guessType} />
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </TableBody>
