@@ -8,24 +8,24 @@
 >
   <defs>
     <linearGradient id="shieldGrad" x1="18" y1="10" x2="82" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#06B6D4" />
-      <stop offset="50%" stopColor="#8B5CF6" />
-      <stop offset="100%" stopColor="#EAB308" />
+      <stop offset="0%" stop-color="#06B6D4" />
+      <stop offset="50%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#EAB308" />
     </linearGradient>
 
     <linearGradient id="loopCyan" x1="20" y1="20" x2="50" y2="52" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#06B6D4" />
-      <stop offset="100%" stopColor="#3B82F6" />
+      <stop offset="0%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#3B82F6" />
     </linearGradient>
 
     <linearGradient id="loopPurple" x1="20" y1="50" x2="80" y2="80" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#8B5CF6" />
-      <stop offset="100%" stopColor="#4F46E5" />
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#4F46E5" />
     </linearGradient>
 
     <linearGradient id="loopGold" x1="80" y1="20" x2="50" y2="80" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#EAB308" />
-      <stop offset="100%" stopColor="#F97316" />
+      <stop offset="0%" stop-color="#EAB308" />
+      <stop offset="100%" stop-color="#F97316" />
     </linearGradient>
   </defs>
 
@@ -33,27 +33,27 @@
   <path
     d="M50 10 C 66 7, 82 12, 82 26 C 82 53, 67 76, 50 88 C 33 76, 18 53, 18 26 C 18 12, 34 7, 50 10 Z"
     stroke="url(#shieldGrad)"
-    strokeWidth="4"
-    strokeLinejoin="round"
-    strokeLinecap="round"
+    stroke-width="4"
+    stroke-linejoin="round"
+    stroke-linecap="round"
     fill="none"
   />
 
   <!-- Network Loops (Symmetrical Overlapping Ovals/Curves) -->
   <!-- Loop Left-Top -->
-  <ellipse cx="42" cy="44" rx="13" ry="22" transform="rotate(-30 42 44)" stroke="url(#loopCyan)" strokeWidth="2.5" fill="none" opacity="0.9" />
+  <ellipse cx="42" cy="44" rx="13" ry="22" transform="rotate(-30 42 44)" stroke="url(#loopCyan)" stroke-width="2.5" fill="none" opacity="0.9" />
   
   <!-- Loop Right-Top -->
-  <ellipse cx="58" cy="44" rx="13" ry="22" transform="rotate(30 58 44)" stroke="url(#loopGold)" strokeWidth="2.5" fill="none" opacity="0.9" />
+  <ellipse cx="58" cy="44" rx="13" ry="22" transform="rotate(30 58 44)" stroke="url(#loopGold)" stroke-width="2.5" fill="none" opacity="0.9" />
 
   <!-- Loop Bottom Center -->
-  <path d="M50 52 C 41 52, 41 74, 50 82 C 59 74, 59 52, 50 52 Z" stroke="url(#loopPurple)" strokeWidth="2.5" fill="none" opacity="0.9" />
+  <path d="M50 52 C 41 52, 41 74, 50 82 C 59 74, 59 52, 50 52 Z" stroke="url(#loopPurple)" stroke-width="2.5" fill="none" opacity="0.9" />
 
   <!-- Connecting Mesh Arcs -->
-  <path d="M26 32 C 38 18, 62 18, 74 32" stroke="url(#loopCyan)" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.85" />
-  <path d="M28 64 C 34 50, 44 48, 50 52" stroke="url(#loopPurple)" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.85" />
-  <path d="M72 64 C 66 50, 56 48, 50 52" stroke="url(#loopGold)" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.85" />
+  <path d="M26 32 C 38 18, 62 18, 74 32" stroke="url(#loopCyan)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.85" />
+  <path d="M28 64 C 34 50, 44 48, 50 52" stroke="url(#loopPurple)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.85" />
+  <path d="M72 64 C 66 50, 56 48, 50 52" stroke="url(#loopGold)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.85" />
 
   <!-- Central Node representing the DNS server/network link -->
-  <circle cx="50" cy="52" r="5.5" fill="#071221" stroke="url(#shieldGrad)" strokeWidth="1.5" />
+  <circle cx="50" cy="52" r="5.5" fill="#071221" stroke="url(#shieldGrad)" stroke-width="1.5" />
 </svg>
