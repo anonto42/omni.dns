@@ -1,19 +1,18 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { TourProvider } from './contexts/TourContext'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { ProtectedRoute } from './components/shared/ProtectedRoute'
-import LoginPage from './pages/LoginPage'
 
-// Page wrapper components — imported from src/pages
-import DashboardPage from './pages/DashboardPage'
-import LogsPage from './pages/LogsPage'
-import RecordsPage from './pages/RecordsPage'
-import BlocklistPage from './pages/BlocklistPage'
-import SteeringPage from './pages/SteeringPage'
-import SettingsPage from './pages/SettingsPage'
-import ProfilePage from './pages/ProfilePage'
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const LogsPage = lazy(() => import('./pages/LogsPage'))
+const RecordsPage = lazy(() => import('./pages/RecordsPage'))
+const BlocklistPage = lazy(() => import('./pages/BlocklistPage'))
+const SteeringPage = lazy(() => import('./pages/SteeringPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 
 // ── Dynamic Metadata Updater ──────────────────────────────────────────────
 function MetadataUpdater() {
@@ -64,6 +63,10 @@ function AnimatedRoutes() {
   )
 }
 
+function RouteFallback() {
+  return <div className="min-h-[240px]" aria-busy="true" aria-label="Loading page" />
+}
+
 // ── App Root ──────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -83,18 +86,20 @@ export default function App() {
           },
         }}
       />
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <TourProvider>
-              <DashboardLayout>
-                <AnimatedRoutes />
-              </DashboardLayout>
-            </TourProvider>
-          </ProtectedRoute>
-        } />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <TourProvider>
+                <DashboardLayout>
+                  <AnimatedRoutes />
+                </DashboardLayout>
+              </TourProvider>
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Suspense>
     </>
   )
 }

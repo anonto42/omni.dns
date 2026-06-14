@@ -27,7 +27,7 @@ services:
       - ../frontend:/app
       - frontend-nm:/app/node_modules   # persisted node_modules — survives restarts
     # npm ci is idempotent; the named volume keeps it fast after the first run
-    entrypoint: ["/bin/sh", "-c", "npm ci --prefer-offline && npx tsc --noEmit"]
+    entrypoint: ["/bin/sh", "-c", "npm ci --prefer-offline && npm run typecheck && npm test"]
 
 volumes:
   go-pkg-cache:

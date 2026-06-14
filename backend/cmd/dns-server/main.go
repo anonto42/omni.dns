@@ -33,6 +33,8 @@ var (
 	logPrune    = flag.Duration("log-prune", 0, "Auto-prune logs older than this (e.g. 72h)")
 	logFormat   = flag.String("log-format", "text", "Log format: text or json")
 	logLevel    = flag.String("log-level", "info", "Log level: debug, info, warn, error")
+	adminEmail  = flag.String("admin-email", "", "Initial admin email (or OMNIDNS_ADMIN_EMAIL)")
+	adminPass   = flag.String("admin-password", "", "Initial admin password (or OMNIDNS_ADMIN_PASSWORD)")
 )
 
 // @title           ESP32 DNS Server API
@@ -75,8 +77,8 @@ func main() {
 		slog.Error("open database", "error", err)
 		os.Exit(1)
 	}
-	// Seed admin user
-	if err := database.InitAdmin("anontom90@gmail.com", "admin@1234"); err != nil {
+	email, password := initialAdminCredentials()
+	if err := database.InitAdmin(email, password); err != nil {
 		slog.Error("init admin", "error", err)
 	}
 	defer database.Close()
@@ -216,6 +218,31 @@ func main() {
 
 	wg.Wait()
 	slog.Info("shutdown complete")
+}
+
+func initialAdminCredentials() (string, string) {
+	email := strings.TrimSpace(firstNonEmpty(*adminEmail, os.Getenv("OMNIDNS_ADMIN_EMAIL"), "admin@omnidns.local"))
+	password := firstNonEmpty(*adminPass, os.Getenv("OMNIDNS_ADMIN_PASSWORD"))
+
+	if strings.TrimSpace(password) == "" {
+		slog.Error("initial admin password is required; set OMNIDNS_ADMIN_PASSWORD or --admin-password")
+		os.Exit(1)
+	}
+	if len(password) < 8 {
+		slog.Error("initial admin password must be at least 8 characters")
+		os.Exit(1)
+	}
+
+	return email, password
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func handleTCPConn(conn *net.TCPConn, handler *dns.Handler) {

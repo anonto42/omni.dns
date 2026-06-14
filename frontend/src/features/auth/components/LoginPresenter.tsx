@@ -46,7 +46,7 @@ export const LoginPresenter: React.FC<LoginPresenterProps> = ({
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full bg-[#14191f] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 border border-border rounded-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-[#000204] transition-all duration-200 font-medium h-10"
-                placeholder="anontom90@gmail.com"
+                placeholder="admin@omnidns.local"
                 autoFocus
               />
             </div>

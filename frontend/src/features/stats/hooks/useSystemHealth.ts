@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
-import { getStatus, type Status } from '../api'
-import { usePolling } from '../../../hooks/usePolling'
+import { useEffect, useState } from 'react'
 import { useWindowFocus } from '../../../hooks/useWindowFocus'
+import { useSharedStatus } from './useSharedStatus'
 
 function useNowTick(intervalMs = 1000) {
   const [now, setNow] = useState(() => new Date())
@@ -32,25 +31,10 @@ export interface SystemHealthViewModel {
 }
 
 export function useSystemHealth(): SystemHealthViewModel {
-  const [status, setStatus] = useState<Status | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [lastChecked, setLastChecked] = useState<Date | null>(null)
+  const { status, loading, lastChecked, refresh } = useSharedStatus()
   const now = useNowTick(1000)
 
-  const fetch = useCallback(async () => {
-    try {
-      const data = await getStatus()
-      setStatus(data)
-      setLastChecked(new Date())
-    } catch {
-      // keep last known values
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  usePolling(fetch, 3000)
-  useWindowFocus(fetch)
+  useWindowFocus(refresh)
 
   const ch = status?.cache_hits ?? 0
   const cm = status?.cache_misses ?? 0

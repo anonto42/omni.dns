@@ -12,7 +12,9 @@ services:
       - NET_BIND_SERVICE
     volumes:
       - dns-data:/app/data
-    command: ["./dns-server", "--dns-addr", "192.168.0.111"]
+    environment:
+      OMNIDNS_ADMIN_EMAIL: ${OMNIDNS_ADMIN_EMAIL:-admin@omnidns.local}
+      OMNIDNS_ADMIN_PASSWORD: ${OMNIDNS_ADMIN_PASSWORD:?Set OMNIDNS_ADMIN_PASSWORD before starting OmniDNS}
 
 volumes:
   dns-data:

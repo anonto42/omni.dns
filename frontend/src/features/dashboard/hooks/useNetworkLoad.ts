@@ -1,6 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
-import { getStatus } from '@/features/stats/api'
-import { usePolling } from '@/hooks/usePolling'
+import { useEffect, useState, useMemo } from 'react'
+import { useSharedStatus } from '@/features/stats/hooks/useSharedStatus'
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -41,6 +40,7 @@ export const TOOLTIP_STYLE = {
 // ── Hook ─────────────────────────────────────────────────────────────────
 
 export function useNetworkLoad() {
+  const { status, loading: statusLoading } = useSharedStatus()
   const [data, setData] = useState<ChartSample[]>(() =>
     Array(CHART_POINTS).fill(null).map(() => ({ time: '', total: 0, blocked: 0, cached: 0, allowed: 0 }))
   )
@@ -50,35 +50,35 @@ export function useNetworkLoad() {
   const [cumulative, setCumulative] = useState<Snapshot>({ forwarded: 0, blocked: 0, cached: 0 })
   const [loading, setLoading] = useState(true)
 
-  const fetchFn = useCallback(async () => {
-    try {
-      const s = await getStatus()
-      const fwd  = s.queries_forwarded ?? 0
-      const blk  = s.queries_blocked   ?? 0
-      const cach = s.queries_cached    ?? 0
+  useEffect(() => {
+    if (!status) {
+      if (!statusLoading) setLoading(false)
+      return
+    }
 
-      setCumulative({ forwarded: fwd, blocked: blk, cached: cach })
+    const fwd  = status.queries_forwarded ?? 0
+    const blk  = status.queries_blocked   ?? 0
+    const cach = status.queries_cached    ?? 0
 
-      // Compute delta vs last snapshot
-      const prev = prevRef.current
-      const dFwd  = prev ? Math.max(0, fwd  - prev.forwarded) : 0
-      const dBlk  = prev ? Math.max(0, blk  - prev.blocked)   : 0
-      const dCach = prev ? Math.max(0, cach - prev.cached)    : 0
-      prevRef.current = { forwarded: fwd, blocked: blk, cached: cach }
+    setCumulative({ forwarded: fwd, blocked: blk, cached: cach })
 
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-      setData(prev => [...prev.slice(1), {
-        time,
-        total:   dFwd + dBlk + dCach,
-        allowed: dFwd,
-        blocked: dBlk,
-        cached:  dCach,
-      }])
-      setLoading(false)
-    } catch { setLoading(false) }
-  }, [prevRef])
+    // Compute delta vs last snapshot
+    const prev = prevRef.current
+    const dFwd  = prev ? Math.max(0, fwd  - prev.forwarded) : 0
+    const dBlk  = prev ? Math.max(0, blk  - prev.blocked)   : 0
+    const dCach = prev ? Math.max(0, cach - prev.cached)    : 0
+    prevRef.current = { forwarded: fwd, blocked: blk, cached: cach }
 
-  usePolling(fetchFn, 3000)
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    setData(prev => [...prev.slice(1), {
+      time,
+      total:   dFwd + dBlk + dCach,
+      allowed: dFwd,
+      blocked: dBlk,
+      cached:  dCach,
+    }])
+    setLoading(false)
+  }, [prevRef, status, statusLoading])
 
   const cumTotal = cumulative.forwarded + cumulative.blocked + cumulative.cached
   const cumPctBlocked  = cumTotal > 0 ? Math.round((cumulative.blocked  / cumTotal) * 100) : 0

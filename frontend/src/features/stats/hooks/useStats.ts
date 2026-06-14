@@ -1,7 +1,6 @@
-import { useState, useCallback } from 'react'
-import { getStatus, type Status } from '../api'
-import { usePolling } from '../../../hooks/usePolling'
+import { type Status } from '../api'
 import { useWindowFocus } from '../../../hooks/useWindowFocus'
+import { useSharedStatus } from './useSharedStatus'
 
 export interface StatsViewModel {
   raw: Status | null
@@ -22,23 +21,9 @@ export interface StatsViewModel {
 }
 
 export function useStats(): StatsViewModel {
-  const [raw, setRaw] = useState<Status | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { status: raw, loading, refresh } = useSharedStatus()
 
-  const fetch = useCallback(async () => {
-    try {
-      const data = await getStatus()
-      if (data) {
-        setRaw(data)
-        setLoading(false)
-      }
-    } catch {
-      setLoading(false)
-    }
-  }, [])
-
-  usePolling(fetch, 3000)
-  useWindowFocus(fetch)
+  useWindowFocus(refresh)
 
   const qf = raw?.queries_forwarded ?? 0
   const qb = raw?.queries_blocked ?? 0

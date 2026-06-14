@@ -60,13 +60,16 @@ logs: ## Tail logs from the dev stack
 .PHONY: test
 test: test-backend test-frontend ## Run all checks (lint + unit tests)
 
+.PHONY: lint
+lint: test ## Run the repository checks used before opening a PR
+
 .PHONY: test-backend
 test-backend: ## Run Go lint (golangci-lint) + unit tests in Docker
 	@echo "$(YELLOW)Running Go checks...$(RESET)"
 	$(DC_TEST) run --rm --no-deps backend-check
 
 .PHONY: test-frontend
-test-frontend: ## Run TypeScript type-check in Docker
+test-frontend: ## Run frontend type-checks and unit tests in Docker
 	@echo "$(YELLOW)Running TypeScript check...$(RESET)"
 	$(DC_TEST) run --rm --no-deps frontend-check
 
@@ -87,8 +90,8 @@ up: ## Build production image and start the stack (detached)
 	$(DC_PROD) build
 	@echo "$(YELLOW)Starting production stack...$(RESET)"
 	$(DC_PROD) up -d --force-recreate
-	@echo "$(GREEN)Running. Dashboard → http://192.168.0.111:8080$(RESET)"
-	@echo "$(GREEN)DNS      → 192.168.0.111:53 (UDP)$(RESET)"
+	@echo "$(GREEN)Running. Dashboard → http://localhost:8080$(RESET)"
+	@echo "$(GREEN)DNS      → your host LAN IP:53 (UDP)$(RESET)"
 
 .PHONY: down
 down: ## Stop all running stacks (prod + dev)

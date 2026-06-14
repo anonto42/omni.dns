@@ -16,6 +16,8 @@ services:
     environment:
       CGO_ENABLED: "1"
       GOWORK: "off"
+      OMNIDNS_ADMIN_EMAIL: "admin@omnidns.local"
+      OMNIDNS_ADMIN_PASSWORD: "change-me-in-dev"
     # Pass all config as CLI flags so the binary doesn't need env-var parsing
     command: >
       air -c .air.toml

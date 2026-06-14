@@ -212,7 +212,7 @@ export const Header: React.FC = () => {
             <DropdownMenuLabel className="font-normal bg-muted/20">
               <div className="flex flex-col space-y-1">
                 <p className="text-sm font-bold text-foreground leading-none">{user?.name || 'Administrator'}</p>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">{user?.email || 'anontom90@gmail.com'}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">{user?.email || 'admin@omnidns.local'}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-muted" />

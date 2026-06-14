@@ -44,9 +44,12 @@ make dev
 *   **API Server:** `http://localhost:8080`
 *   **DNS Resolver:** Port `5354` (UDP) on host (mapped to `5353` internally to prevent host conflicts)
 
-### 3. Default Credentials
-*   **Email:** `anontom90@gmail.com`
-*   **Password:** `admin@1234`
+### 3. Development Credentials
+The Docker development stack seeds a local admin account:
+*   **Email:** `admin@omnidns.local`
+*   **Password:** `change-me-in-dev`
+
+For production, set `OMNIDNS_ADMIN_PASSWORD` before first start. The server refuses to create an initial admin account without it.
 
 ---
 
@@ -78,7 +81,8 @@ Builds a single minimal Alpine image (~20 MB) with the Go binary and the compile
 # Build the production image
 make build
 
-# Start the production stack (detached, restarts on failure)
+# Set a private initial admin password, then start the production stack
+export OMNIDNS_ADMIN_PASSWORD='replace-with-a-long-private-password'
 make up
 # → Dashboard at http://localhost:8080
 # → DNS on port 53 (host networking)
@@ -156,9 +160,11 @@ All configurations can be controlled via CLI flags:
 *   `--upstream` (default `1.1.1.1:53`): Fallback upstream DNS server.
 *   `--log-level` (default `info`): Log levels: `debug`, `info`, `warn`, `error`.
 *   `--log-prune` (default `168h`): How long to keep query logs (e.g., `24h`, `168h`).
+*   `--admin-email`: Initial admin email. Can also be set with `OMNIDNS_ADMIN_EMAIL`.
+*   `--admin-password`: Initial admin password. Can also be set with `OMNIDNS_ADMIN_PASSWORD`.
 
 ### API Endpoints
-All dashboard interactions use JSON API endpoints. Authentication is session-cookie based.
+All dashboard interactions use JSON API endpoints. Authentication uses bearer session tokens returned by `POST /api/login`.
 
 *   `POST /api/login` - Authenticate user
 *   `POST /api/logout` - Clear session
