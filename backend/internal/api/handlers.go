@@ -2,30 +2,39 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
+	blocklistapp "github.com/sohidul/dns-server/internal/application/blocklist"
+	recordsapp "github.com/sohidul/dns-server/internal/application/records"
 	"github.com/sohidul/dns-server/internal/db"
 	"github.com/sohidul/dns-server/internal/dns"
+	blocklistdomain "github.com/sohidul/dns-server/internal/domain/blocklist"
+	recordsdomain "github.com/sohidul/dns-server/internal/domain/records"
 	"github.com/sohidul/dns-server/internal/models"
 )
 
-const (
-	maxDomainLen = 253
-	maxBodyBytes = 1 << 16
-)
+const maxBodyBytes = 1 << 16
 
 type Handler struct {
-	db  *db.DB
-	dns *dns.Handler
+	db        *db.DB
+	dns       *dns.Handler
+	records   *recordsapp.Service
+	blocklist *blocklistapp.Service
 }
 
 func NewHandler(database *db.DB, dnsHandler *dns.Handler) *Handler {
-	return &Handler{db: database, dns: dnsHandler}
+	notifier := db.NewNotificationRepository(database)
+	return &Handler{
+		db:        database,
+		dns:       dnsHandler,
+		records:   recordsapp.NewService(db.NewRecordsRepository(database), notifier),
+		blocklist: blocklistapp.NewService(db.NewBlocklistRepository(database), notifier),
+	}
 }
 
 func respond(w http.ResponseWriter, status int, data any) {
@@ -33,6 +42,12 @@ func respond(w http.ResponseWriter, status int, data any) {
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		slog.Error("failed to encode json response", "error", err)
+	}
+}
+
+func (h *Handler) notify(notifType, title, message string) {
+	if err := h.db.AddNotification(notifType, title, message); err != nil {
+		slog.Error("failed to add notification", "type", notifType, "title", title, "error", err)
 	}
 }
 
@@ -61,16 +76,6 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]string{"status": "ok"})
 }
 
-// GetLogs godoc
-// @Summary      Get query logs
-// @Description  Returns the most recent DNS query logs
-// @Produce      json
-// @Success      200  {array}  models.QueryLog
-// @Router       /api/logs [get]
-func (h *Handler) GetLogs(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, h.db.GetLogs(100))
-}
-
 // ClearLogs godoc
 // @Summary      Clear query logs
 // @Description  Deletes all DNS query logs from the database
@@ -89,32 +94,17 @@ func (h *Handler) ClearLogs(w http.ResponseWriter, r *http.Request) {
 // @Success      200  {object}  map[string]string
 // @Router       /api/records [get]
 func (h *Handler) GetRecords(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, h.db.GetCustomRecords())
-}
-
-func validDomain(domain string) bool {
-	if len(domain) == 0 || len(domain) > maxDomainLen {
-		return false
+	records, err := h.records.List(r.Context())
+	if err != nil {
+		slog.Error("list records failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to retrieve records"})
+		return
 	}
-	// Allow wildcard prefix (*.example.com) — strip it before validating the rest.
-	d := domain
-	if strings.HasPrefix(d, "*.") {
-		d = d[2:]
+	out := make(map[string]string, len(records))
+	for _, rec := range records {
+		out[rec.Domain] = rec.IP
 	}
-	if len(d) == 0 {
-		return false
-	}
-	for _, c := range d {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_') {
-			return false
-		}
-	}
-	return true
-}
-
-func validIP(ip string) bool {
-	return net.ParseIP(ip) != nil
+	respond(w, 200, out)
 }
 
 // AddRecord godoc
@@ -135,21 +125,33 @@ func (h *Handler) AddRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body.Domain = strings.ToLower(strings.TrimSpace(body.Domain))
-	body.IP = strings.TrimSpace(body.IP)
-
-	if !validDomain(body.Domain) {
-		respond(w, 400, map[string]string{"error": "invalid domain name"})
+	if err := h.records.Add(r.Context(), body.Domain, body.IP); err != nil {
+		if errors.Is(err, recordsdomain.ErrInvalidDomain) {
+			respond(w, 400, map[string]string{"error": "invalid domain name"})
+			return
+		}
+		if errors.Is(err, recordsdomain.ErrInvalidIP) {
+			respond(w, 400, map[string]string{"error": "invalid IP address"})
+			return
+		}
+		slog.Error("add record failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to add record"})
 		return
 	}
-	if !validIP(body.IP) {
-		respond(w, 400, map[string]string{"error": "invalid IP address"})
-		return
-	}
 
-	h.db.AddCustomRecord(body.Domain, body.IP)
-	h.db.AddNotification("success", "DNS Record Created", fmt.Sprintf("Custom DNS record created for %s pointing to %s.", body.Domain, body.IP))
 	respond(w, 200, map[string]bool{"ok": true})
+}
+
+func respondRecordError(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, recordsdomain.ErrInvalidDomain) {
+		respond(w, 400, map[string]string{"error": "invalid domain name"})
+		return true
+	}
+	if errors.Is(err, recordsdomain.ErrInvalidIP) {
+		respond(w, 400, map[string]string{"error": "invalid IP address"})
+		return true
+	}
+	return false
 }
 
 // DeleteRecord godoc
@@ -161,7 +163,6 @@ func (h *Handler) AddRecord(w http.ResponseWriter, r *http.Request) {
 // @Success      200     {object}  map[string]bool
 // @Failure      400     {object}  map[string]string
 // @Router       /api/records [delete]
-// func (h *Handler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 
@@ -171,15 +172,15 @@ func (h *Handler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body.Domain = strings.ToLower(strings.TrimSpace(body.Domain))
-
-	if !validDomain(body.Domain) {
-		respond(w, 400, map[string]string{"error": "invalid domain name"})
+	if err := h.records.Delete(r.Context(), body.Domain); err != nil {
+		if respondRecordError(w, err) {
+			return
+		}
+		slog.Error("delete record failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to delete record"})
 		return
 	}
 
-	h.db.DeleteCustomRecord(body.Domain)
-	h.db.AddNotification("info", "DNS Record Deleted", fmt.Sprintf("Custom DNS record for %s has been deleted.", body.Domain))
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
@@ -190,7 +191,21 @@ func (h *Handler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 // @Success      200  {array}  models.BlockedDomain
 // @Router       /api/blocklist [get]
 func (h *Handler) GetBlocklist(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, h.db.GetBlocklist())
+	entries, err := h.blocklist.List(r.Context())
+	if err != nil {
+		slog.Error("list blocklist failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to retrieve blocklist"})
+		return
+	}
+	out := make([]models.BlockedDomain, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, models.BlockedDomain{
+			Domain:   e.Domain,
+			AddedAt:  e.AddedAt,
+			Wildcard: e.Wildcard,
+		})
+	}
+	respond(w, 200, out)
 }
 
 // AddToBlocklist godoc
@@ -211,15 +226,16 @@ func (h *Handler) AddToBlocklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body.Domain = strings.ToLower(strings.TrimSpace(body.Domain))
-
-	if !validDomain(body.Domain) {
-		respond(w, 400, map[string]string{"error": "invalid domain name"})
+	if err := h.blocklist.Add(r.Context(), body.Domain, body.Wildcard); err != nil {
+		if errors.Is(err, blocklistdomain.ErrInvalidDomain) {
+			respond(w, 400, map[string]string{"error": "invalid domain name"})
+			return
+		}
+		slog.Error("add to blocklist failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to add to blocklist"})
 		return
 	}
 
-	h.db.AddToBlocklist(body.Domain, body.Wildcard)
-	h.db.AddNotification("warning", "Domain Blocked", fmt.Sprintf("Domain %s added to local blocklist (Wildcard: %t).", body.Domain, body.Wildcard))
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
@@ -265,7 +281,7 @@ func (h *Handler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.db.SaveSettings(body)
-	h.db.AddNotification("success", "Settings Saved", "Upstream DNS and blocking behaviors updated successfully.")
+	h.notify("success", "Settings Saved", "Upstream DNS and blocking behaviors updated successfully.")
 
 	// Apply changes immediately without restart.
 	if addr, ok := body["upstream_dns"]; ok && addr != "" {
@@ -301,19 +317,25 @@ func (h *Handler) RemoveFromBlocklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body.Domain = strings.ToLower(strings.TrimSpace(body.Domain))
-
-	if !validDomain(body.Domain) {
-		respond(w, 400, map[string]string{"error": "invalid domain name"})
+	if err := h.blocklist.Remove(r.Context(), body.Domain); err != nil {
+		if errors.Is(err, blocklistdomain.ErrInvalidDomain) {
+			respond(w, 400, map[string]string{"error": "invalid domain name"})
+			return
+		}
+		slog.Error("remove from blocklist failed", "error", err)
+		respond(w, 500, map[string]string{"error": "failed to remove from blocklist"})
 		return
 	}
 
-	h.db.RemoveFromBlocklist(body.Domain)
-	h.db.AddNotification("success", "Domain Unblocked", fmt.Sprintf("Domain %s removed from local blocklist.", body.Domain))
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
-// GetLogs with optional ?limit=N&action=blocked&domain=example query params
+// GetLogsFiltered godoc
+// @Summary      Get query logs
+// @Description  Returns recent DNS query logs, optionally filtered by ?limit=N&action=blocked&domain=example
+// @Produce      json
+// @Success      200  {array}  models.QueryLog
+// @Router       /api/logs [get]
 func (h *Handler) GetLogsFiltered(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	action := r.URL.Query().Get("action")
@@ -351,7 +373,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		respond(w, 500, map[string]string{"error": "failed to change password"})
 		return
 	}
-	h.db.AddNotification("info", "Password Changed", "Administrator account password updated successfully.")
+	h.notify("info", "Password Changed", "Administrator account password updated successfully.")
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
@@ -377,7 +399,7 @@ func (h *Handler) AddSteeringRule(w http.ResponseWriter, r *http.Request) {
 		respond(w, 500, map[string]string{"error": "failed to add rule"})
 		return
 	}
-	h.db.AddNotification("success", "Steering Rule Added", fmt.Sprintf("Added rule \"%s\" successfully.", body.Name))
+	h.notify("success", "Steering Rule Added", fmt.Sprintf("Added rule \"%s\" successfully.", body.Name))
 	respond(w, 200, map[string]any{"ok": true, "id": id})
 }
 
@@ -393,7 +415,7 @@ func (h *Handler) UpdateSteeringRule(w http.ResponseWriter, r *http.Request) {
 	if body.Enabled {
 		status = "enabled"
 	}
-	h.db.AddNotification("info", fmt.Sprintf("Steering Rule %s", strings.Title(status)), fmt.Sprintf("Traffic steering rule ID %d has been %s.", body.ID, status))
+	h.notify("info", fmt.Sprintf("Steering Rule %s", titleCase(status)), fmt.Sprintf("Traffic steering rule ID %d has been %s.", body.ID, status))
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
@@ -405,7 +427,7 @@ func (h *Handler) DeleteSteeringRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.db.DeleteSteeringRule(body.ID)
-	h.db.AddNotification("info", "Steering Rule Deleted", fmt.Sprintf("Traffic steering rule ID %d has been deleted.", body.ID))
+	h.notify("info", "Steering Rule Deleted", fmt.Sprintf("Traffic steering rule ID %d has been deleted.", body.ID))
 	respond(w, 200, map[string]bool{"ok": true})
 }
 
@@ -463,8 +485,15 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.AddNotification("success", "Profile Updated", fmt.Sprintf("Account details updated: Name='%s', Email='%s'.", body.Name, body.Email))
+	h.notify("success", "Profile Updated", fmt.Sprintf("Account details updated: Name='%s', Email='%s'.", body.Name, body.Email))
 	respond(w, 200, map[string]bool{"ok": true})
+}
+
+func titleCase(value string) string {
+	if value == "" {
+		return value
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {

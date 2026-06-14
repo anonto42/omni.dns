@@ -30,8 +30,8 @@ type Handler struct {
 	started   time.Time
 	blockNX   bool
 
-	rulesMu      sync.RWMutex
-	rulesCache   []models.SteeringRule
+	rulesMu       sync.RWMutex
+	rulesCache    []models.SteeringRule
 	rulesLoadedAt time.Time
 }
 
@@ -59,7 +59,7 @@ func (h *Handler) HandleUDP(conn *net.UDPConn, client *net.UDPAddr, data []byte)
 		return
 	}
 
-	respMsg, _ := h.handle(msg, client.IP.String(), "UDP")
+	respMsg := h.handle(msg, client.IP.String(), "UDP")
 	if respMsg == nil {
 		return
 	}
@@ -81,7 +81,7 @@ func (h *Handler) HandleTCP(conn net.Conn, data []byte, clientIP string) {
 		return
 	}
 
-	respMsg, _ := h.handle(msg, clientIP, "TCP")
+	respMsg := h.handle(msg, clientIP, "TCP")
 	if respMsg == nil {
 		return
 	}
@@ -126,9 +126,9 @@ func extractAnswerInfo(answers []dns.RR) (firstIP string, allAnswers string, cou
 	return
 }
 
-func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, models.Action) {
+func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) *dns.Msg {
 	if len(msg.Question) == 0 {
-		return nil, ""
+		return nil
 	}
 
 	question := msg.Question[0]
@@ -153,7 +153,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 		entry.AllAnswers = blockedIPResp
 		entry.AnswerCount = 1
 		h.db.LogQuery(entry)
-		return h.buildResponse(msg, blockedIPResp, 60, h.blockNX), models.ActionBlocked
+		return h.buildResponse(msg, blockedIPResp, 60, h.blockNX)
 	}
 
 	// Evaluate steering rules in priority order.
@@ -175,7 +175,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 			entry.AllAnswers = blockedIPResp
 			entry.AnswerCount = 1
 			h.db.LogQuery(entry)
-			return h.buildResponse(msg, blockedIPResp, 60, h.blockNX), models.ActionBlocked
+			return h.buildResponse(msg, blockedIPResp, 60, h.blockNX)
 
 		case "Redirect":
 			// Return the target IP directly.
@@ -188,7 +188,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 				entry.AnswerCount = 1
 				entry.TTL = 60
 				h.db.LogQuery(entry)
-				return h.buildResponse(msg, rule.ActionTarget, 60, false), models.ActionCustom
+				return h.buildResponse(msg, rule.ActionTarget, 60, false)
 			}
 
 		case "Forward":
@@ -219,7 +219,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 			entry.UpstreamResolver = target
 			entry.LatencyMs = latencyMs
 			h.db.LogQuery(entry)
-			return resp, models.ActionForwarded
+			return resp
 		}
 		break // first matching rule wins
 	}
@@ -234,7 +234,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 			entry.AnswerCount = 1
 			entry.TTL = 300
 			h.db.LogQuery(entry)
-			return h.buildResponse(msg, ip, 300, false), models.ActionCustom
+			return h.buildResponse(msg, ip, 300, false)
 		}
 	}
 
@@ -248,7 +248,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 			entry.AnswerCount = 1
 			entry.TTL = cached.TTL
 			h.db.LogQuery(entry)
-			return h.buildResponse(msg, cached.IP, cached.TTL, cached.NXDOMAIN), models.ActionCached
+			return h.buildResponse(msg, cached.IP, cached.TTL, cached.NXDOMAIN)
 		}
 	}
 
@@ -266,7 +266,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 		h.db.LogQuery(entry)
 		resp := new(dns.Msg)
 		resp.SetRcode(msg, dns.RcodeServerFailure)
-		return resp, models.ActionError
+		return resp
 	}
 
 	firstIP, allAnswers, answerCount, ttl := extractAnswerInfo(response.Answer)
@@ -293,7 +293,7 @@ func (h *Handler) handle(msg *dns.Msg, clientIP, protocol string) (*dns.Msg, mod
 	entry.UpstreamResolver = upstream
 	entry.LatencyMs = latencyMs
 	h.db.LogQuery(entry)
-	return response, models.ActionForwarded
+	return response
 }
 
 func (h *Handler) buildResponse(req *dns.Msg, ip string, ttl uint32, nxdomain bool) *dns.Msg {
@@ -340,7 +340,6 @@ func (h *Handler) getSteeringRules() []models.SteeringRule {
 	h.rulesMu.Unlock()
 	return rules
 }
-
 
 // forwardToUpstream sends a query to a specific upstream address and returns the response.
 func forwardToUpstream(msg *dns.Msg, addr string) (*dns.Msg, error) {

@@ -30,12 +30,6 @@ type QueryLog struct {
 	LatencyMs        float64   `json:"latency_ms" example:"12.5"`
 }
 
-type CustomRecord struct {
-	Domain string `json:"domain" example:"mydevice.local"`
-	IP     string `json:"ip" example:"192.168.1.100"`
-	Type   string `json:"type" example:"A"`
-}
-
 type BlockedDomain struct {
 	Domain   string    `json:"domain" example:"ads.example.com"`
 	AddedAt  time.Time `json:"added_at" example:"2024-10-25T10:00:00Z"`
@@ -125,4 +119,3 @@ type ManageNotificationRequest struct {
 	ID  int64 `json:"id"`
 	All bool  `json:"all"`
 }
-

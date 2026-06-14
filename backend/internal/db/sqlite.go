@@ -135,18 +135,9 @@ func Open(path string) (*DB, error) {
 			return nil, err
 		}
 	}
-	// Migrate existing databases — ignore errors if columns already exist.
-	conn.Exec("ALTER TABLE users ADD COLUMN name TEXT DEFAULT 'Administrator'")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN mac_address TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN protocol TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN query_type TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN response_code TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN resolved_ip TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN all_answers TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN answer_count INTEGER DEFAULT 0")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN ttl INTEGER DEFAULT 0")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN upstream_resolver TEXT DEFAULT ''")
-	conn.Exec("ALTER TABLE query_logs ADD COLUMN latency_ms REAL DEFAULT 0")
+	if err := migrate(conn); err != nil {
+		return nil, err
+	}
 	db := &DB{
 		conn:    conn,
 		logChan: make(chan models.QueryLog, 1000),
@@ -154,6 +145,33 @@ func Open(path string) (*DB, error) {
 	}
 	go db.processLogBuffer()
 	return db, nil
+}
+
+func migrate(conn *sql.DB) error {
+	queries := []string{
+		"ALTER TABLE users ADD COLUMN name TEXT DEFAULT 'Administrator'",
+		"ALTER TABLE query_logs ADD COLUMN mac_address TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN protocol TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN query_type TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN response_code TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN resolved_ip TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN all_answers TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN answer_count INTEGER DEFAULT 0",
+		"ALTER TABLE query_logs ADD COLUMN ttl INTEGER DEFAULT 0",
+		"ALTER TABLE query_logs ADD COLUMN upstream_resolver TEXT DEFAULT ''",
+		"ALTER TABLE query_logs ADD COLUMN latency_ms REAL DEFAULT 0",
+	}
+
+	for _, query := range queries {
+		if _, err := conn.Exec(query); err != nil && !isDuplicateColumnErr(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func isDuplicateColumnErr(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "duplicate column")
 }
 
 func (db *DB) Close() error {
@@ -268,28 +286,6 @@ func (db *DB) GetStats() models.Stats {
 	}
 }
 
-func (db *DB) GetLogs(limit int) []models.QueryLog {
-	rows, err := db.conn.Query("SELECT id, timestamp, domain, client_ip, action, COALESCE(mac_address,''), COALESCE(protocol,''), COALESCE(query_type,''), COALESCE(response_code,''), COALESCE(resolved_ip,''), COALESCE(all_answers,''), COALESCE(answer_count,0), COALESCE(ttl,0), COALESCE(upstream_resolver,''), COALESCE(latency_ms,0) FROM query_logs ORDER BY id DESC LIMIT ?", limit)
-	if err != nil {
-		return []models.QueryLog{}
-	}
-	defer rows.Close()
-
-	logs := make([]models.QueryLog, 0)
-	for rows.Next() {
-		var l models.QueryLog
-		var ts string
-		if err := rows.Scan(&l.ID, &ts, &l.Domain, &l.ClientIP, &l.Action, &l.MACAddress, &l.Protocol, &l.QueryType, &l.ResponseCode, &l.ResolvedIP, &l.AllAnswers, &l.AnswerCount, &l.TTL, &l.UpstreamResolver, &l.LatencyMs); err != nil {
-			continue
-		}
-		if t, err := time.Parse(time.RFC3339, ts); err == nil {
-			l.Timestamp = t
-		}
-		logs = append(logs, l)
-	}
-	return logs
-}
-
 func (db *DB) ClearLogs() {
 	if _, err := db.conn.Exec("DELETE FROM query_logs"); err != nil {
 		slog.Error("clear logs failed", "error", err)
@@ -302,35 +298,6 @@ func (db *DB) PruneLogs(t time.Time) {
 	}
 }
 
-func (db *DB) GetCustomRecords() map[string]string {
-	rows, err := db.conn.Query("SELECT domain, ip FROM custom_records")
-	if err != nil {
-		return map[string]string{}
-	}
-	defer rows.Close()
-
-	records := map[string]string{}
-	for rows.Next() {
-		var domain, ip string
-		if err := rows.Scan(&domain, &ip); err == nil {
-			records[domain] = ip
-		}
-	}
-	return records
-}
-
-func (db *DB) AddCustomRecord(domain, ip string) {
-	if _, err := db.conn.Exec("INSERT OR REPLACE INTO custom_records (domain, ip) VALUES (?, ?)", domain, ip); err != nil {
-		slog.Error("add custom record failed", "error", err)
-	}
-}
-
-func (db *DB) DeleteCustomRecord(domain string) {
-	if _, err := db.conn.Exec("DELETE FROM custom_records WHERE domain = ?", domain); err != nil {
-		slog.Error("delete custom record failed", "error", err)
-	}
-}
-
 func (db *DB) GetCustomRecord(domain string) string {
 	var ip string
 	err := db.conn.QueryRow("SELECT ip FROM custom_records WHERE domain = ?", domain).Scan(&ip)
@@ -338,46 +305,6 @@ func (db *DB) GetCustomRecord(domain string) string {
 		return ""
 	}
 	return ip
-}
-
-func (db *DB) GetBlocklist() []models.BlockedDomain {
-	rows, err := db.conn.Query("SELECT domain, added_at, wildcard FROM blocklist ORDER BY domain")
-	if err != nil {
-		return []models.BlockedDomain{}
-	}
-	defer rows.Close()
-
-	domains := make([]models.BlockedDomain, 0)
-	for rows.Next() {
-		var d models.BlockedDomain
-		var addedAt string
-		var wildcardInt int
-		if err := rows.Scan(&d.Domain, &addedAt, &wildcardInt); err != nil {
-			continue
-		}
-		d.Wildcard = wildcardInt != 0
-		if t, err := time.Parse(time.RFC3339, addedAt); err == nil {
-			d.AddedAt = t
-		}
-		domains = append(domains, d)
-	}
-	return domains
-}
-
-func (db *DB) AddToBlocklist(domain string, wildcard bool) {
-	w := 0
-	if wildcard {
-		w = 1
-	}
-	if _, err := db.conn.Exec("INSERT OR IGNORE INTO blocklist (domain, added_at, wildcard) VALUES (?, ?, ?)", domain, time.Now().Format(time.RFC3339), w); err != nil {
-		slog.Error("add to blocklist failed", "error", err)
-	}
-}
-
-func (db *DB) RemoveFromBlocklist(domain string) {
-	if _, err := db.conn.Exec("DELETE FROM blocklist WHERE domain = ?", domain); err != nil {
-		slog.Error("remove from blocklist failed", "error", err)
-	}
 }
 
 func (db *DB) IsBlocked(domain string) bool {
@@ -627,17 +554,20 @@ func (db *DB) UpdateProfile(oldEmail, newEmail, name string) error {
 	if err != nil {
 		return err
 	}
-	
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			slog.Error("profile tx rollback failed", "error", err)
+		}
+	}()
+
 	// If email changes, check if the new email is already in use by another user
 	if oldEmail != newEmail {
 		var count int
 		err = tx.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", newEmail).Scan(&count)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 		if count > 0 {
-			tx.Rollback()
 			return fmt.Errorf("email %s is already in use", newEmail)
 		}
 	}
@@ -645,17 +575,14 @@ func (db *DB) UpdateProfile(oldEmail, newEmail, name string) error {
 	// Update users table
 	_, err = tx.Exec("UPDATE users SET email = ?, name = ? WHERE email = ?", newEmail, name, oldEmail)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
 	// Update sessions table so the active session maps to the new email
 	_, err = tx.Exec("UPDATE sessions SET email = ? WHERE email = ?", newEmail, oldEmail)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
 	return tx.Commit()
 }
-
