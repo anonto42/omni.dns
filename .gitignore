@@ -2,6 +2,7 @@
 backend/bin/
 backend/tmp/
 backend/static/
+backend/cmd/dns-server/static/
 backend/docs/
 *.db
 *.db-shm
