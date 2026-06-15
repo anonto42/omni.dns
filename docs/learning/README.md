@@ -141,6 +141,7 @@ testable and what we will keep returning to.
 | [6](06-persistence.md) | `database/sql`, SQLite, migrations, buffering | `db/` |
 | [7](07-http-api.md) | `net/http`, chi, middleware, JSON, auth | `api/` |
 | [8](08-testing-and-optimizations.md) | Testing, the race detector, perf wins, exercises | `*_test.go` |
+| [9](09-performance-optimization.md) | Hot-path analysis, caching, locks, batching, profiling | `cache/`, `db/`, `forwarder/` |
 
 Start with [Chapter 1 →](01-go-foundations.md)
 
