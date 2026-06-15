@@ -11,7 +11,7 @@
 No framework required. A test is a function `TestXxx(t *testing.T)` in a file
 ending `_test.go`. Run them with `go test ./...`.
 
-Open [`internal/domain/records/record_test.go`](../../backend/internal/domain/records/record_test.go):
+Open [`internal/modules/records/domain/record_test.go`](../../backend/internal/modules/records/domain/record_test.go):
 
 ```go
 func TestNewNormalizesAndValidatesRecord(t *testing.T) {
@@ -65,7 +65,7 @@ line. This is the single most useful Go testing pattern — internalize it.
 
 Because the resolver depends on **interfaces** (Chapter 3), we test it with
 hand-written fakes instead of a real DB or upstream. From
-[`internal/dns/resolver/resolver_test.go`](../../backend/internal/dns/resolver/resolver_test.go):
+[`internal/modules/resolver/engine/resolver_test.go`](../../backend/internal/modules/resolver/engine/resolver_test.go):
 
 ```go
 type fakeRecords struct {
@@ -139,7 +139,7 @@ func newTestDB(t *testing.T, ttl time.Duration) *DB {
 - `t.Cleanup(fn)` registers teardown (close the DB) without a manual `defer` in
   every test.
 
-See [`session_test.go`](../../backend/internal/db/session_test.go) for how this tests the
+See [`session_test.go`](../../backend/internal/infrastructure/persistence/session_test.go) for how this tests the
 real session-expiry behavior against an actual (temporary) SQLite database.
 
 ---
@@ -192,7 +192,7 @@ Each entry: the problem, the fix, the file, and the lesson.
 ### 1. Per-query syscall → cached ARP table
 - **Before:** every DNS query opened and parsed `/proc/net/arp` to find the
   client MAC — a filesystem syscall on the hot path, ~1 ms each.
-- **After:** [`dns/arp`](../../backend/internal/dns/arp/) refreshes the table on a 30 s
+- **After:** [`dns/arp`](../../backend/internal/modules/resolver/engine/arp/) refreshes the table on a 30 s
   background goroutine; `Lookup` is a map read under `RLock`.
 - **Lesson:** move slow, rarely-changing work *out* of the hot path and cache it.
   Refresh on a timer, read from memory.
@@ -207,7 +207,7 @@ Each entry: the problem, the fix, the file, and the lesson.
 ### 3. Domain-only cache → qtype-keyed cache with negative entries
 - **Before:** cache keyed by domain, stored only A records, no negative caching.
   AAAA queries were never cached and sometimes mishandled.
-- **After:** [`dns/cache`](../../backend/internal/dns/cache/) keys by `(domain, qtype)`
+- **After:** [`dns/cache`](../../backend/internal/modules/resolver/engine/cache/) keys by `(domain, qtype)`
   and caches positive, NXDOMAIN, **and** NODATA results.
 - **Lesson:** the cache key must include everything that distinguishes a result.
   Negative caching cuts upstream load for nonexistent names.
@@ -229,7 +229,7 @@ Each entry: the problem, the fix, the file, and the lesson.
   and lock contention.
 
 ### 6. Health-checked upstream failover
-- **Mechanism:** [`dns/forwarder`](../../backend/internal/dns/forwarder/) probes
+- **Mechanism:** [`dns/forwarder`](../../backend/internal/modules/resolver/engine/forwarder/) probes
   upstreams every 30 s, marks them healthy/unhealthy, and `Forward` skips
   unhealthy ones (Chapter 4).
 - **Lesson:** don't send traffic to a dead dependency. Background health checks +
@@ -277,9 +277,9 @@ A few principles this codebase embodies:
    second call.
 2. **Benchmark the cache.** Add `func BenchmarkCacheGet(b *testing.B)` in
    `cache_test.go` that pre-populates one entry and loops `c.Get` in `b.N`. Run
-   `go test -bench=. ./internal/dns/cache/`. Then try `-benchmem` to see
+   `go test -bench=. ./internal/modules/resolver/engine/cache/`. Then try `-benchmem` to see
    allocations.
-3. **Table-test `matchCIDR`.** In `internal/dns/resolver`, write a table-driven
+3. **Table-test `matchCIDR`.** In `internal/modules/resolver/engine`, write a table-driven
    test for `matchCIDR` covering an in-range IP, an out-of-range IP, a bare-IP
    match, and a malformed CIDR. (It's a pure function — easy and high-value.)
 4. **Find an N+1.** `LookupRecord` does up to two queries per miss. Sketch how

@@ -31,7 +31,7 @@ configuration — which makes it an ideal vehicle for learning Go end to end.
 
 1. **Read in order.** The chapters build on each other.
 2. **Keep the code open beside the doc.** Every section cites real files and
-   line ranges like [`internal/dns/resolver/resolver.go`](../../backend/internal/dns/resolver/resolver.go).
+   line ranges like [`internal/modules/resolver/engine/resolver.go`](../../backend/internal/modules/resolver/engine/resolver.go).
    Open them.
 3. **Run things.** Each chapter has a *"Try it"* box with commands.
 4. **Do the exercises** at the end of each chapter. They are designed to make
@@ -70,6 +70,10 @@ The backend follows **clean architecture**: dependencies point *inward*, toward
 the domain. Outer layers (HTTP, DNS, SQLite) depend on inner layers (application
 services, domain), never the reverse.
 
+The backend is organized into **per-feature modules**, each split into the same
+three layers (`domain`, `application`, `infrastructure`), plus shared packages,
+the transport layer, and a composition root.
+
 ```
 cmd/dns-server/            Program entry point + build-tag UI embedding
   main.go                  Wires config -> logger -> server, then runs it
@@ -77,55 +81,64 @@ cmd/dns-server/            Program entry point + build-tag UI embedding
   embed_dev.go             //go:build !embed  — serves ./static from disk
 
 internal/
-  config/                  Load + validate configuration (flags + env)
-  logger/                  Configure the slog structured logger
+  shared/                  Importable by any layer
+    config/                Load + validate configuration (flags + env)
+    logger/                Configure the slog structured logger
+    models/                Plain data structs shared across layers
 
-  server/                  Composition root: builds and owns every component
+  modules/                 One vertical slice per feature
+    resolver/              The DNS engine (the heart of the app)
+      domain/ports.go      Interfaces the engine depends on (inversion of control)
+      engine/
+        resolver.go        Pipeline: blocklist -> steering -> records -> cache -> upstream
+        responses.go       Build A/AAAA/NXDOMAIN/NODATA replies
+        matching.go        Steering condition matching (domain/CIDR/time)
+        ports.go           Type aliases re-exporting the domain ports
+        cache/             qtype-keyed LRU+TTL cache
+        forwarder/         Upstream pool with health-checked failover
+        arp/               Cached IP->MAC lookups (Linux build tags)
+    blocklist/             domain/ application/ infrastructure/
+    records/               domain/ application/ infrastructure/
+    steering/              domain/ application/ infrastructure/
+    notification/          infrastructure/  (notification sink)
+      (each module: domain = pure rules, application = use cases/DTOs,
+       infrastructure = SQLite-backed repository implementing the domain ports)
+
+  infrastructure/
+    persistence/           SQLite connection, schema, migrations, buffered log
+                           writer, sessions, stats (shared db plumbing)
+
+  interfaces/              Transport layer (depends inward only)
+    http/
+      router.go            Route table
+      middleware/          CORS, auth, request-ID
+      handlers/            One file per resource (auth, records, blocklist, ...)
+    dns/
+      handler.go           Wire-format packet <-> resolver engine adapter
+
+  server/                  Composition root: builds and wires every module
     server.go              Dependency injection + lifecycle (start/stop)
     listeners.go           UDP/TCP/HTTP listeners
     static.go              Serve the single-page app
-
-  dns/                     Everything DNS
-    handler.go             Wire-format packet <-> resolver adapter
-    resolver/              The resolution pipeline (the heart of the app)
-      resolver.go          The pipeline: blocklist -> steering -> records -> cache -> upstream
-      responses.go         Build A/AAAA/NXDOMAIN/NODATA replies
-      matching.go          Steering condition matching (domain/CIDR/time)
-      ports.go             Interfaces the resolver depends on (inversion of control)
-    cache/                 qtype-keyed LRU+TTL cache
-    forwarder/             Upstream pool with health-checked failover
-    arp/                   Cached IP->MAC lookups (Linux build tags)
-
-  api/                     HTTP REST layer
-    router.go              Route table
-    middleware/            CORS, auth, request-ID
-    handlers/              One file per resource (auth, records, blocklist, ...)
-
-  application/             Use-case orchestration (services)
-    records/  blocklist/  steering/
-
-  domain/                  Pure business rules, no I/O
-    records/  blocklist/  steering/
-
-  db/                      SQLite persistence
-    sqlite.go              Connection, schema, migrations, buffered log writer
-    auth.go  queries.go  records.go
-    models/                Plain data structs shared across layers
-    repositories/          Implement the domain's outbound ports
 ```
 
-### The dependency rule, drawn
+### The dependency rule
+
+Each layer may depend only on layers below it:
 
 ```
-   HTTP handlers ─┐
-                  ├─► application services ─► domain (pure rules)
-   DNS resolver ──┘            ▲
-                               │ (interfaces / "ports")
-   db, cache, forwarder, arp ──┘  (implement the ports)
+   interfaces/  (http handlers, dns adapter)
+        │
+        ▼
+   modules/*/application  ──►  modules/*/domain  (pure rules + ports)
+                                     ▲
+   modules/*/infrastructure ────────┘  (implement the domain ports)
+   infrastructure/persistence ───────┘
+   shared/*  ── importable by any layer
 ```
 
-The domain knows nothing about HTTP, DNS, or SQLite. That is what makes it
-testable and what we will keep returning to.
+The domain layer of each module knows nothing about HTTP, DNS, or SQLite. That
+is what makes it testable and what we will keep returning to.
 
 ---
 
@@ -133,15 +146,15 @@ testable and what we will keep returning to.
 
 | Chapter | You will learn | Anchor code |
 |--------:|----------------|-------------|
-| [1](01-go-foundations.md) | Packages, modules, types, methods, errors, `slog` | `models`, `domain` |
-| [2](02-entrypoint-and-config.md) | `main`, flags vs env, build tags, validation | `cmd/`, `config/` |
-| [3](03-interfaces-and-architecture.md) | Interfaces, dependency injection, DDD layers | `resolver/ports.go`, `server/` |
-| [4](04-concurrency.md) | Goroutines, channels, mutexes, `context`, shutdown | `cache/`, `forwarder/`, `db/` |
-| [5](05-dns-resolver-pipeline.md) | The full resolver, line by line; AAAA/NODATA | `dns/` |
-| [6](06-persistence.md) | `database/sql`, SQLite, migrations, buffering | `db/` |
-| [7](07-http-api.md) | `net/http`, chi, middleware, JSON, auth | `api/` |
+| [1](01-go-foundations.md) | Packages, modules, types, methods, errors, `slog` | `shared/models`, `modules/*/domain` |
+| [2](02-entrypoint-and-config.md) | `main`, flags vs env, build tags, validation | `cmd/`, `shared/config/` |
+| [3](03-interfaces-and-architecture.md) | Interfaces, dependency injection, DDD layers | `modules/resolver/domain/ports.go`, `server/` |
+| [4](04-concurrency.md) | Goroutines, channels, mutexes, `context`, shutdown | `resolver/engine/{cache,forwarder}`, `persistence/` |
+| [5](05-dns-resolver-pipeline.md) | The full resolver, line by line; AAAA/NODATA | `modules/resolver/`, `interfaces/dns/` |
+| [6](06-persistence.md) | `database/sql`, SQLite, migrations, buffering | `infrastructure/persistence/` |
+| [7](07-http-api.md) | `net/http`, chi, middleware, JSON, auth | `interfaces/http/` |
 | [8](08-testing-and-optimizations.md) | Testing, the race detector, perf wins, exercises | `*_test.go` |
-| [9](09-performance-optimization.md) | Hot-path analysis, caching, locks, batching, profiling | `cache/`, `db/`, `forwarder/` |
+| [9](09-performance-optimization.md) | Hot-path analysis, caching, locks, batching, profiling | `resolver/engine/{cache,forwarder}`, `persistence/` |
 
 Start with [Chapter 1 →](01-go-foundations.md)
 

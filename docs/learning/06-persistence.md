@@ -10,7 +10,7 @@
 
 Go's `database/sql` package is a **driver-agnostic** API. You import a driver for
 its side effects and talk to everything through `*sql.DB`. From
-[`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go):
+[`internal/infrastructure/persistence/sqlite.go`](../../backend/internal/infrastructure/persistence/sqlite.go):
 
 ```go
 import (
@@ -118,7 +118,7 @@ and new code can share a database file.
 Three methods cover almost everything:
 
 - **`QueryRow`** — exactly one row. From
-  [`internal/db/records.go`](../../backend/internal/db/records.go):
+  [`internal/infrastructure/persistence/records.go`](../../backend/internal/infrastructure/persistence/records.go):
 
 ```go
 func (db *DB) LookupRecord(ctx context.Context, domain string, qtype uint16) (ip string, found bool, existsOtherType bool) {
@@ -139,7 +139,7 @@ placeholders are **parameters** — never string-concatenate user input into SQL
 (SQL injection). The driver binds them safely.
 
 - **`Query`** — many rows; you iterate. From
-  [`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go):
+  [`internal/infrastructure/persistence/sqlite.go`](../../backend/internal/infrastructure/persistence/sqlite.go):
 
 ```go
 rows, err := db.conn.Query(query, args...)
@@ -179,14 +179,14 @@ res, err := db.conn.Exec("INSERT INTO steering_rules (...) VALUES (?, ?, ...)", 
 `QueryContext`, `QueryRowContext`, `ExecContext` take a `context.Context` as the
 first arg, so a cancelled request (Chapter 4) can abort an in-flight query. The
 repositories use these and thread `ctx` from the HTTP handler all the way down —
-see [`internal/db/repositories/records.go`](../../backend/internal/db/repositories/records.go).
+see [`internal/modules/records/infrastructure/records.go`](../../backend/internal/modules/records/infrastructure/records.go).
 
 ---
 
 ## 6.4 The session-expiry fix, in SQL
 
 The old code created sessions that **never expired** — a security hole. The fix
-spans three methods in [`internal/db/auth.go`](../../backend/internal/db/auth.go).
+spans three methods in [`internal/infrastructure/persistence/auth.go`](../../backend/internal/infrastructure/persistence/auth.go).
 
 **Create with an expiry:**
 
@@ -242,7 +242,7 @@ func (db *DB) SweepExpiredSessions() {
 
 Lazy deletion handles tokens people present; the sweeper reaps tokens nobody will
 ever present again. Together the table can't grow unbounded. Tests in
-[`session_test.go`](../../backend/internal/db/session_test.go) pin all three behaviors.
+[`session_test.go`](../../backend/internal/infrastructure/persistence/session_test.go) pin all three behaviors.
 
 > **Password security bonus:** `auth.go` hashes passwords with **Argon2id**
 > (`golang.org/x/crypto/argon2`) and compares them with
@@ -310,9 +310,10 @@ v.(type)` is a **type switch** — branching on the dynamic type of an `any`.
 ## 6.6 The repository pattern: keeping SQL out of the domain
 
 Chapter 3 showed the domain defining `Repository` interfaces. The
-**implementations** live in [`internal/db/repositories/`](../../backend/internal/db/repositories/),
+**implementations** live in each module's `infrastructure/` package (e.g.
+[`internal/modules/records/infrastructure/`](../../backend/internal/modules/records/infrastructure/)),
 the only place that knows both SQL *and* domain types. Example —
-[`repositories/records.go`](../../backend/internal/db/repositories/records.go):
+[`records/infrastructure/records.go`](../../backend/internal/modules/records/infrastructure/records.go):
 
 ```go
 func (r *Records) Save(ctx context.Context, record recordsdomain.Record) error {
@@ -332,14 +333,14 @@ SQL never imports HTTP. Each concern stays in its package.
 
 `r.db.Conn()` exposes the underlying `*sql.DB` so repositories in a sibling
 package can run queries — a deliberate, narrow seam between `db` and
-`db/repositories`.
+each module's `infrastructure/`.
 
 ---
 
 ## 6.7 Transactions
 
 When several writes must succeed or fail together, use a transaction. From
-`SaveSettings` in [`internal/db/queries.go`](../../backend/internal/db/queries.go):
+`SaveSettings` in [`internal/infrastructure/persistence/queries.go`](../../backend/internal/infrastructure/persistence/queries.go):
 
 ```go
 tx, err := db.conn.Begin()

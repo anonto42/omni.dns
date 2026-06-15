@@ -18,7 +18,7 @@ So the rule that governs every decision in this codebase:
 
 > **Optimize `Resolve` and everything it touches. Favor clarity everywhere else.**
 
-The query path is: `listeners.go` (read packet) → `dns/handler.go` (unpack) →
+The query path is: `listeners.go` (read packet) → `interfaces/dns/handler.go` (unpack) →
 `resolver.Resolve` (blocklist → steering → records → cache → upstream) →
 `r.logger.LogQuery` (record it). We'll walk each cost on that path.
 
@@ -43,7 +43,7 @@ The single most impactful optimization in any forwarding DNS server is the
 round trip with a tens-of-nanoseconds map lookup — a **~100,000×** improvement on
 that query.
 
-Open [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go).
+Open [`internal/modules/resolver/engine/cache/cache.go`](../../backend/internal/modules/resolver/engine/cache/cache.go).
 
 ### The data structure: O(1) LRU
 
@@ -201,7 +201,7 @@ This is the clearest before/after in the project.
 **Before:** every query called `lookupMAC(ip)`, which opened and line-scanned
 `/proc/net/arp` — a filesystem syscall, ~1 ms, on every single DNS query.
 
-**After:** [`internal/dns/arp/arp.go`](../../backend/internal/dns/arp/arp.go)
+**After:** [`internal/modules/resolver/engine/arp/arp.go`](../../backend/internal/modules/resolver/engine/arp/arp.go)
 refreshes the whole table on a 30s background goroutine; the per-query `Lookup`
 is the in-memory `RLock` map read shown above.
 
@@ -243,7 +243,7 @@ Steering rules are read on **every** query but change **rarely** (an admin edits
 them occasionally). Querying SQLite for the rule set per DNS query would add a
 database round trip to the hot path. The resolver caches them for 10 seconds
 behind a double-checked `RWMutex` — `activeRules` in
-[`resolver.go`](../../backend/internal/dns/resolver/resolver.go):
+[`resolver.go`](../../backend/internal/modules/resolver/engine/resolver.go):
 
 ```go
 func (r *Resolver) activeRules() []models.SteeringRule {
@@ -285,7 +285,7 @@ Two techniques in one small function:
 
 Writing to SQLite synchronously on every query would put a disk write on the hot
 path — catastrophic at thousands of QPS. OmniDNS makes logging **asynchronous and
-batched**. Open [`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go).
+batched**. Open [`internal/infrastructure/persistence/sqlite.go`](../../backend/internal/infrastructure/persistence/sqlite.go).
 
 ### Hand-off is non-blocking
 
@@ -419,7 +419,7 @@ it in our own mutex. The pool *is* the optimization.
 ## 9.9 Optimization #8 — Health-checked failover (tail-latency)
 
 A dead upstream is a latency disaster: every query waits for a timeout before
-failing over. [`forwarder`](../../backend/internal/dns/forwarder/) probes each
+failing over. [`forwarder`](../../backend/internal/modules/resolver/engine/forwarder/) probes each
 upstream every 30s and marks it healthy/unhealthy, so `Forward` **skips known-bad
 upstreams immediately** instead of timing out on them per query:
 
@@ -458,7 +458,7 @@ Good performance writing names the trade-offs, not just the wins.
 **Real opportunities, honestly flagged (don't do them without a profiler):**
 
 1. **`LookupRecord` does up to 2 queries on a miss**
-   ([`records.go`](../../backend/internal/db/records.go)): one for the exact
+   ([`records.go`](../../backend/internal/infrastructure/persistence/records.go)): one for the exact
    `(domain, qtype)`, then a `COUNT(*)` to detect the other family. It could be
    one `SELECT qtype FROM custom_records WHERE domain = ?` and decide in Go. But
    custom-record lookups are *rare* (most queries are cache hits or forwards), so
@@ -489,14 +489,14 @@ Optimization claims mean nothing without measurement. Go gives you the tools:
 
 ```bash
 # Microbenchmark a function (see the exercise below)
-go test -bench=. -benchmem ./internal/dns/cache/
+go test -bench=. -benchmem ./internal/modules/resolver/engine/cache/
 
 # CPU profile while load-testing the running server
-go test -cpuprofile=cpu.out -bench=BenchmarkCacheGet ./internal/dns/cache/
+go test -cpuprofile=cpu.out -bench=BenchmarkCacheGet ./internal/modules/resolver/engine/cache/
 go tool pprof cpu.out          # then 'top', 'list Get', 'web'
 
 # Find lock contention
-go test -mutexprofile=mu.out -bench=. ./internal/dns/cache/
+go test -mutexprofile=mu.out -bench=. ./internal/modules/resolver/engine/cache/
 
 # Always validate concurrency correctness alongside perf
 go test -race ./...
@@ -520,7 +520,7 @@ by feel.
    	for i := 0; i < b.N; i++ { c.Get("example.com", dns.TypeA) }
    }
    ```
-   Run `go test -bench=BenchmarkCacheGet -benchmem ./internal/dns/cache/`. Record
+   Run `go test -bench=BenchmarkCacheGet -benchmem ./internal/modules/resolver/engine/cache/`. Record
    `ns/op` and `allocs/op`. How many allocations per `Get`? Where do they come
    from? (Hint: the `key()` concat.)
 2. **Prove the LRU is O(1).** Benchmark `Get` with cache sizes 100, 10_000, and

@@ -93,7 +93,7 @@ A **channel** is a typed pipe that safely passes values between goroutines.
 
 The query-log writer is the textbook example. Writing to SQLite on every single
 DNS query would be slow, so logs are **batched**. Open
-[`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go):
+[`internal/infrastructure/persistence/sqlite.go`](../../backend/internal/infrastructure/persistence/sqlite.go):
 
 ```go
 type DB struct {
@@ -200,7 +200,7 @@ Channels are great for *handing off* values. But sometimes many goroutines need
 to read and write **shared state** — like the DNS cache. For that, Go uses a
 **mutex** (mutual exclusion lock).
 
-Open [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go):
+Open [`internal/modules/resolver/engine/cache/cache.go`](../../backend/internal/modules/resolver/engine/cache/cache.go):
 
 ```go
 type Cache struct {
@@ -267,7 +267,7 @@ Several components do periodic work on their own goroutine. The pattern is
 always: `NewTicker` + `for { select { <-ticker.C ... <-stop ... } }`.
 
 **The forwarder health loop** —
-[`internal/dns/forwarder/health.go`](../../backend/internal/dns/forwarder/health.go):
+[`internal/modules/resolver/engine/forwarder/health.go`](../../backend/internal/modules/resolver/engine/forwarder/health.go):
 
 ```go
 func (p *Pool) healthLoop() {
@@ -290,7 +290,7 @@ func (p *Pool) healthLoop() {
 expired entries (so dead entries don't linger between lazy expiries on `Get`).
 
 **The ARP refresher** —
-[`internal/dns/arp/arp.go`](../../backend/internal/dns/arp/arp.go) — reloads the
+[`internal/modules/resolver/engine/arp/arp.go`](../../backend/internal/modules/resolver/engine/arp/arp.go) — reloads the
 IP→MAC table on its interval:
 
 ```go
@@ -434,7 +434,7 @@ Three rules that prevent the classic bugs:
 ## Exercises
 
 1. **Watch a race.** In `cache.go`, change `Get`'s `c.mu.Lock()` to
-   `c.mu.RLock()` (and `Unlock`→`RUnlock`). Run `go test -race ./internal/dns/cache/`.
+   `c.mu.RLock()` (and `Unlock`→`RUnlock`). Run `go test -race ./internal/modules/resolver/engine/cache/`.
    The race detector should fire on the `c.hits++`/`c.misses++` write under a
    read lock. Revert.
 2. **Drop vs block.** Temporarily change `LogQuery`'s `select { case ...: default: }`

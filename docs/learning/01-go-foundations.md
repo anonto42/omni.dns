@@ -31,10 +31,10 @@ require (
 A **package** is a directory of `.go` files that share the same `package` name
 on their first line. Open these two files:
 
-- [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go) → `package cache`
-- [`internal/dns/cache/cache_test.go`](../../backend/internal/dns/cache/cache_test.go) → `package cache`
+- [`internal/modules/resolver/engine/cache/cache.go`](../../backend/internal/modules/resolver/engine/cache/cache.go) → `package cache`
+- [`internal/modules/resolver/engine/cache/cache_test.go`](../../backend/internal/modules/resolver/engine/cache/cache_test.go) → `package cache`
 
-Both are in `internal/dns/cache/`, both say `package cache`. They are the same
+Both are in `internal/modules/resolver/engine/cache/`, both say `package cache`. They are the same
 package split across files. **Files are an organizational convenience; the
 package is the real unit.**
 
@@ -42,7 +42,7 @@ package is the real unit.**
 
 The directory name `internal` is special to the Go toolchain: packages under
 `internal/` can only be imported by code rooted at the parent of `internal/`.
-So nobody outside this module can import our `internal/db`. This is how Go
+So nobody outside this module can import our `infrastructure/persistence`. This is how Go
 enforces "these are private implementation packages."
 
 > **Try it:** rename `internal` to `lib` and run `go build ./...`. It still
@@ -55,17 +55,19 @@ When two imported packages would collide, or a name is ambiguous, Go lets you
 
 ```go
 import (
-	"github.com/sohidul/dns-server/internal/api"
-	apimw "github.com/sohidul/dns-server/internal/api/middleware"
-	appdns "github.com/sohidul/dns-server/internal/dns"
-	blocklistapp "github.com/sohidul/dns-server/internal/application/blocklist"
+	httpapi "github.com/sohidul/dns-server/internal/interfaces/http"
+	apimw "github.com/sohidul/dns-server/internal/interfaces/http/middleware"
+	appdns "github.com/sohidul/dns-server/internal/interfaces/dns"
+	blocklistapp "github.com/sohidul/dns-server/internal/modules/blocklist/application"
 	// ...
 )
 ```
 
-`apimw` and `appdns` are aliases. We alias `internal/dns` to `appdns` because
-`dns` is already taken by the third-party `github.com/miekg/dns` package used
-elsewhere. **Aliasing is about readability, not magic.**
+`httpapi`, `apimw`, and `appdns` are aliases. We alias `internal/interfaces/dns`
+to `appdns` because `dns` is already taken by the third-party
+`github.com/miekg/dns` package used elsewhere, and `internal/interfaces/http` to
+`httpapi` because `http` would collide with the standard library's `net/http`.
+**Aliasing is about readability and avoiding collisions, not magic.**
 
 ---
 
@@ -75,7 +77,7 @@ Go has no `public`/`private` keywords. Instead, **an identifier starting with a
 capital letter is exported** (visible outside its package); lowercase is
 package-private.
 
-Open [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go):
+Open [`internal/modules/resolver/engine/cache/cache.go`](../../backend/internal/modules/resolver/engine/cache/cache.go):
 
 ```go
 type Cache struct {        // Exported: other packages can use cache.Cache
@@ -105,7 +107,7 @@ directly — they must go through `Get`, `Set`, `Size`, etc. That is
 
 A `struct` groups fields. A **method** is a function with a *receiver*.
 
-From [`internal/db/models/models.go`](../../backend/internal/db/models/models.go):
+From [`internal/shared/models/models.go`](../../backend/internal/shared/models/models.go):
 
 ```go
 type QueryLog struct {
@@ -121,7 +123,7 @@ type QueryLog struct {
 This is a *plain data* struct — no methods, just fields. It's a "DTO" (data
 transfer object) that flows between layers.
 
-Now a struct *with* methods, from [`internal/domain/records/value_obj.go`](../../backend/internal/domain/records/value_obj.go):
+Now a struct *with* methods, from [`internal/modules/records/domain/value_obj.go`](../../backend/internal/modules/records/domain/value_obj.go):
 
 ```go
 type IP struct {
@@ -142,7 +144,7 @@ func (ip IP) QType() uint16 {                       // value receiver
 `(ip IP)` is a **value receiver**: the method gets a *copy* of the `IP`. That's
 fine here because `IP` is small and immutable.
 
-Compare with [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go):
+Compare with [`internal/modules/resolver/engine/cache/cache.go`](../../backend/internal/modules/resolver/engine/cache/cache.go):
 
 ```go
 func (c *Cache) Set(domain string, qtype uint16, ips []string, ttl uint32) {
@@ -165,7 +167,7 @@ consistent within a type.
 
 ## 1.4 Named types and constants
 
-From [`internal/db/models/models.go`](../../backend/internal/db/models/models.go):
+From [`internal/shared/models/models.go`](../../backend/internal/shared/models/models.go):
 
 ```go
 type Action string
@@ -190,7 +192,7 @@ The `const (...)` block groups related constants. This is Go's lightweight
 substitute for enums.
 
 > Compare with the steering query types in
-> [`internal/domain/records/value_obj.go`](../../backend/internal/domain/records/value_obj.go):
+> [`internal/modules/records/domain/value_obj.go`](../../backend/internal/modules/records/domain/value_obj.go):
 > ```go
 > const (
 > 	TypeA    uint16 = 1
@@ -210,7 +212,7 @@ pointers/slices/maps/interfaces, and a struct whose fields are each their zero
 value.
 
 This shapes idiomatic Go. Look at how a `QueryLog` is built in the resolver
-([`internal/dns/resolver/resolver.go`](../../backend/internal/dns/resolver/resolver.go)):
+([`internal/modules/resolver/engine/resolver.go`](../../backend/internal/modules/resolver/engine/resolver.go)):
 
 ```go
 base := models.QueryLog{
@@ -244,7 +246,7 @@ This is a clean, allocation-cheap pattern you'll see throughout.
 Go has no exceptions. Functions that can fail return an `error` as their last
 result, and you check it explicitly.
 
-From [`internal/config/config.go`](../../backend/internal/config/config.go):
+From [`internal/shared/config/config.go`](../../backend/internal/shared/config/config.go):
 
 ```go
 func (cfg Config) Validate() error {
@@ -280,7 +282,7 @@ path is visible at the call site. There's no hidden control flow.
 `fmt.Errorf("open database: %w", err)` **wraps** the original error, adding
 context ("open database:") while preserving the original underneath. Callers can
 later test the chain with `errors.Is` / `errors.As`. We use exactly that in the
-HTTP layer — see [`internal/api/handlers/records.go`](../../backend/internal/api/handlers/records.go):
+HTTP layer — see [`internal/interfaces/http/handlers/records.go`](../../backend/internal/interfaces/http/handlers/records.go):
 
 ```go
 func writeRecordError(w http.ResponseWriter, err error) bool {
@@ -298,7 +300,7 @@ func writeRecordError(w http.ResponseWriter, err error) bool {
 
 `errors.Is(err, recordsdomain.ErrInvalidDomain)` walks the wrap chain looking
 for that **sentinel error**, defined once in
-[`internal/domain/records/value_obj.go`](../../backend/internal/domain/records/value_obj.go):
+[`internal/modules/records/domain/value_obj.go`](../../backend/internal/modules/records/domain/value_obj.go):
 
 ```go
 var (
@@ -317,7 +319,7 @@ domain," and the edge decides that means `400`.
 
 This project never uses `fmt.Println` for logging. It uses the standard
 library's structured logger, `log/slog`. Setup lives in
-[`internal/logger/logger.go`](../../backend/internal/logger/logger.go):
+[`internal/shared/logger/logger.go`](../../backend/internal/shared/logger/logger.go):
 
 ```go
 func Setup(format, levelName string) {
@@ -354,7 +356,7 @@ to see only problems.
 ## 1.8 Putting it together: read one whole small file
 
 You now know enough to read an entire file unaided. Open
-[`internal/domain/blocklist/value_obj.go`](../../backend/internal/domain/blocklist/value_obj.go)
+[`internal/modules/blocklist/domain/value_obj.go`](../../backend/internal/modules/blocklist/domain/value_obj.go)
 and identify, by yourself:
 
 1. The package name and what it represents.

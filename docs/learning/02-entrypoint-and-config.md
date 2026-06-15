@@ -74,7 +74,7 @@ init failed, there's nothing meaningful to clean up yet.
 
 ## 2.2 Configuration: flags, environment, defaults
 
-Open [`internal/config/config.go`](../../backend/internal/config/config.go). The `Config`
+Open [`internal/shared/config/config.go`](../../backend/internal/shared/config/config.go). The `Config`
 struct is the single source of truth for every tunable:
 
 ```go
@@ -228,11 +228,11 @@ implementation at *compile* time, with zero runtime cost.
 ### Platform-specific code (Linux vs the rest)
 
 The ARP cache (Chapter 4) reads `/proc/net/arp`, which only exists on Linux.
-Same technique, in [`internal/dns/arp/`](../../backend/internal/dns/arp/):
+Same technique, in [`internal/modules/resolver/engine/arp/`](../../backend/internal/modules/resolver/engine/arp/):
 
-- [`table_linux.go`](../../backend/internal/dns/arp/table_linux.go) → `//go:build linux`,
+- [`table_linux.go`](../../backend/internal/modules/resolver/engine/arp/table_linux.go) → `//go:build linux`,
   parses `/proc/net/arp`.
-- [`table_other.go`](../../backend/internal/dns/arp/table_other.go) → `//go:build !linux`,
+- [`table_other.go`](../../backend/internal/modules/resolver/engine/arp/table_other.go) → `//go:build !linux`,
   returns an empty table.
 
 So the project **compiles on macOS/Windows** (where it returns empty MACs) and
@@ -277,7 +277,7 @@ listening. We'll dissect `New` and `Run` in Chapters 3 and 4.
    `60s`. Don't use it yet — just make `go build` pass. (You'll wire it into the
    cache in Chapter 4's exercises.)
 4. **Read a build tag.** Without running it, predict: does
-   `go vet ./internal/dns/arp/` on macOS check `table_linux.go`? Then verify with
+   `go vet ./internal/modules/resolver/engine/arp/` on macOS check `table_linux.go`? Then verify with
    `go vet -tags linux ...` vs without. (Answer: by default `go vet` checks the
    files for the *host* OS; `table_linux.go` is skipped off-Linux unless you
    cross-target.)
