@@ -3,7 +3,11 @@ backend/bin/
 backend/tmp/
 backend/static/
 backend/cmd/dns-server/static/
-backend/docs/
+# Generated API docs (Swagger). Hand-written docs under backend/docs/ are tracked.
+backend/docs/swagger/
+backend/docs/docs.go
+backend/docs/swagger.json
+backend/docs/swagger.yaml
 *.db
 *.db-shm
 *.db-wal
