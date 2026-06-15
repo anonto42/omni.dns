@@ -306,4 +306,9 @@ learning:
   add per-client query-rate limiting. Each is a self-contained vertical slice
   through the architecture you now understand.
 
-[← Chapter 7](07-http-api.md) · [Back to the index](README.md)
+> **Going deeper on performance?** This chapter catalogs *what* was optimized.
+> [Chapter 9](09-performance-optimization.md) is a dedicated deep dive into *how*
+> each optimization works on the hot path, its cost model, the trade-offs, and
+> how to profile and measure them yourself.
+
+[← Chapter 7](07-http-api.md) · [Chapter 9: Performance optimization →](09-performance-optimization.md)
