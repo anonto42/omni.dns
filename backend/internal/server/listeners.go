@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	appdns "github.com/sohidul/dns-server/internal/dns"
+	appdns "github.com/sohidul/dns-server/internal/interfaces/dns"
 )
 
 const readDeadline = 500 * time.Millisecond

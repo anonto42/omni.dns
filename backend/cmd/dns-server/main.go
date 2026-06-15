@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/sohidul/dns-server/internal/config"
-	"github.com/sohidul/dns-server/internal/logger"
 	"github.com/sohidul/dns-server/internal/server"
+	"github.com/sohidul/dns-server/internal/shared/config"
+	"github.com/sohidul/dns-server/internal/shared/logger"
 )
 
 func main() {

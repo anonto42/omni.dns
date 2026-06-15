@@ -19,20 +19,23 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/sohidul/dns-server/internal/api"
-	"github.com/sohidul/dns-server/internal/api/handlers"
-	apimw "github.com/sohidul/dns-server/internal/api/middleware"
-	blocklistapp "github.com/sohidul/dns-server/internal/application/blocklist"
-	recordsapp "github.com/sohidul/dns-server/internal/application/records"
-	steeringapp "github.com/sohidul/dns-server/internal/application/steering"
-	"github.com/sohidul/dns-server/internal/config"
-	"github.com/sohidul/dns-server/internal/db"
-	"github.com/sohidul/dns-server/internal/db/repositories"
-	appdns "github.com/sohidul/dns-server/internal/dns"
-	"github.com/sohidul/dns-server/internal/dns/arp"
-	"github.com/sohidul/dns-server/internal/dns/cache"
-	"github.com/sohidul/dns-server/internal/dns/forwarder"
-	"github.com/sohidul/dns-server/internal/dns/resolver"
+	db "github.com/sohidul/dns-server/internal/infrastructure/persistence"
+	appdns "github.com/sohidul/dns-server/internal/interfaces/dns"
+	httpapi "github.com/sohidul/dns-server/internal/interfaces/http"
+	"github.com/sohidul/dns-server/internal/interfaces/http/handlers"
+	apimw "github.com/sohidul/dns-server/internal/interfaces/http/middleware"
+	blocklistapp "github.com/sohidul/dns-server/internal/modules/blocklist/application"
+	blocklistinfra "github.com/sohidul/dns-server/internal/modules/blocklist/infrastructure"
+	notificationinfra "github.com/sohidul/dns-server/internal/modules/notification/infrastructure"
+	recordsapp "github.com/sohidul/dns-server/internal/modules/records/application"
+	recordsinfra "github.com/sohidul/dns-server/internal/modules/records/infrastructure"
+	resolver "github.com/sohidul/dns-server/internal/modules/resolver/engine"
+	"github.com/sohidul/dns-server/internal/modules/resolver/engine/arp"
+	"github.com/sohidul/dns-server/internal/modules/resolver/engine/cache"
+	"github.com/sohidul/dns-server/internal/modules/resolver/engine/forwarder"
+	steeringapp "github.com/sohidul/dns-server/internal/modules/steering/application"
+	steeringinfra "github.com/sohidul/dns-server/internal/modules/steering/infrastructure"
+	"github.com/sohidul/dns-server/internal/shared/config"
 )
 
 // StaticFiles describes the UI assets to serve at "/".
@@ -100,13 +103,13 @@ func New(cfg config.Config, static StaticFiles) (*Server, error) {
 		BlockNX:   cfg.BlockNX,
 	})
 
-	notifier := repositories.NewNotifications(database)
+	notifier := notificationinfra.NewNotifications(database)
 	apiHandler := handlers.New(
 		database,
 		res,
-		recordsapp.NewService(repositories.NewRecords(database), notifier),
-		blocklistapp.NewService(repositories.NewBlocklist(database), notifier),
-		steeringapp.NewService(repositories.NewSteering(database), notifier),
+		recordsapp.NewService(recordsinfra.NewRecords(database), notifier),
+		blocklistapp.NewService(blocklistinfra.NewBlocklist(database), notifier),
+		steeringapp.NewService(steeringinfra.NewSteering(database), notifier),
 	)
 
 	return &Server{
@@ -171,7 +174,7 @@ func (s *Server) startHTTP() {
 	r.Use(apimw.RequestID)
 	r.Use(apimw.CORS(s.cfg.AllowedOrigin))
 
-	api.RegisterRoutes(r, s.database, s.api)
+	httpapi.RegisterRoutes(r, s.database, s.api)
 	s.registerStaticRoutes(r)
 
 	s.httpServer = &http.Server{
