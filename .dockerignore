@@ -23,7 +23,6 @@ backend/tmp
 
 # Docs / non-code
 docs
-firmware
 config
 *.md
 LICENSE

@@ -1,8 +1,8 @@
-# Full Project Plan — ESP32 DNS Server
+# Full Project Plan — Home Network DNS Server
 
 ## Overview
 
-Three parts, one system:
+Two parts, one system:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -13,20 +13,11 @@ Three parts, one system:
                        │ REST API (JSON)
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                   Go Backend (server/)                  │
+│                   Go Backend (backend/)                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
 │  │ DNS      │  │ REST API │  │ SQLite               │  │
 │  │ Server   │  │ (Chi)    │  │ (logs, records,      │  │
 │  │ :53      │  │ :8080    │  │  blocklist)          │  │
-│  └──────────┘  └──────────┘  └──────────────────────┘  │
-└──────────────────────┬──────────────────────────────────┘
-                       │ UDP port 53
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│              ESP32 Rust Firmware (firmware/)            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
-│  │ DNS      │  │ WiFi STA │  │ OLED + LEDs + Buttons│  │
-│  │ Server   │  │ + Relay  │  │ (I2C, GPIO)          │  │
 │  └──────────┘  └──────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -112,51 +103,6 @@ npm install tailwindcss @tailwindcss/vite
 
 ---
 
-## Part 3 — ESP32 Rust Firmware (`firmware/`)
-
-### What it does
-
-Runs entirely on the ESP32 — no Linux machine needed.
-
-- WiFi station mode (connects to your router)
-- DNS server on port 53 (same logic as Go version)
-- Query forwarding to 1.1.1.1
-- Blocklist + custom records stored in flash (SPIFFS or NVS)
-- OLED SSD1306 display (I2C) — shows stats
-- RGB LED — green = running, red = blocking active
-- Physical button — toggle blocklist on/off
-
-### Files to build
-
-| File | What it does |
-|------|-------------|
-| `Cargo.toml` | Dependencies (esp-idf-hal, embedded-svc, etc.) |
-| `src/main.rs` | Entry point: init WiFi, start DNS + HTTP server |
-| `src/dns.rs` | DNS packet parser and response builder |
-| `src/wifi.rs` | WiFi connection manager with reconnect |
-| `src/display.rs` | OLED SSD1306 driver (I2C) |
-| `src/led.rs` | RGB LED controller |
-| `src/button.rs` | Button debounce handler |
-| `src/storage.rs` | NVS/SPIFFS for persisting blocklist + records |
-
-### Setup (when ready)
-
-```bash
-# Install esp-rs toolchain
-cargo install espup
-espup install
-
-# Install espflash
-cargo install espflash
-
-# Build and flash
-cd firmware
-cargo build
-espflash flash target/esp32/debug/firmware.bin
-```
-
----
-
 ## Build Order (Recommended)
 
 ```
@@ -168,9 +114,6 @@ Week 2:  SQLite + REST API
 
 Week 3:  React dashboard
          Test with: browser at localhost:5173
-
-Week 4:  ESP32 Rust firmware
-         Test with: set router DNS to ESP32 IP
 ```
 
 ---
