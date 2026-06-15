@@ -31,7 +31,7 @@ configuration — which makes it an ideal vehicle for learning Go end to end.
 
 1. **Read in order.** The chapters build on each other.
 2. **Keep the code open beside the doc.** Every section cites real files and
-   line ranges like [`internal/dns/resolver/resolver.go`](../../internal/dns/resolver/resolver.go).
+   line ranges like [`internal/dns/resolver/resolver.go`](../../backend/internal/dns/resolver/resolver.go).
    Open them.
 3. **Run things.** Each chapter has a *"Try it"* box with commands.
 4. **Do the exercises** at the end of each chapter. They are designed to make

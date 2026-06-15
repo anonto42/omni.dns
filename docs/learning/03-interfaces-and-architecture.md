@@ -13,7 +13,7 @@ satisfies an interface automatically if it has the right methods.** No
 `implements` keyword. This is called **structural typing** (or "duck typing,
 checked at compile time").
 
-Open [`internal/dns/resolver/ports.go`](../../internal/dns/resolver/ports.go):
+Open [`internal/dns/resolver/ports.go`](../../backend/internal/dns/resolver/ports.go):
 
 ```go
 // Blocklist reports whether a domain is blocked.
@@ -47,20 +47,20 @@ a consumer actually needs.
 ### Who implements them?
 
 The `*db.DB` type implements **all five**, but it never says so. Look at
-[`internal/db/queries.go`](../../internal/db/queries.go):
+[`internal/db/queries.go`](../../backend/internal/db/queries.go):
 
 ```go
 func (db *DB) IsBlocked(domain string) bool { ... }     // satisfies Blocklist
 func (db *DB) Rules() []models.SteeringRule { ... }     // satisfies SteeringRules
 ```
 
-and [`internal/db/records.go`](../../internal/db/records.go):
+and [`internal/db/records.go`](../../backend/internal/db/records.go):
 
 ```go
 func (db *DB) Lookup(domain string, qtype uint16) (string, bool, bool) { ... }  // CustomRecords
 ```
 
-and [`internal/db/sqlite.go`](../../internal/db/sqlite.go):
+and [`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go):
 
 ```go
 func (db *DB) LogQuery(log models.QueryLog) { ... }     // QueryLogger
@@ -96,7 +96,7 @@ resolver → db. The dependency has been *inverted*. This is the "D" in SOLID, a
 it's why:
 
 - The resolver can be **unit-tested** with fake implementations (no SQLite, no
-  network) — see [`resolver_test.go`](../../internal/dns/resolver/resolver_test.go)
+  network) — see [`resolver_test.go`](../../backend/internal/dns/resolver/resolver_test.go)
   and Chapter 8.
 - You could swap SQLite for Postgres by writing new types that satisfy the same
   interfaces, **without touching the resolver**.
@@ -114,7 +114,7 @@ the code that implements them. This keeps providers ignorant of their consumers
 and lets each consumer ask for exactly the narrow slice it needs.
 
 Contrast with the *domain* packages, which define their own outbound ports —
-e.g. [`internal/domain/records/repository.go`](../../internal/domain/records/repository.go):
+e.g. [`internal/domain/records/repository.go`](../../backend/internal/domain/records/repository.go):
 
 ```go
 type Repository interface {
@@ -139,7 +139,7 @@ inversion, one layer in.
 All these interfaces and implementations have to be connected *somewhere*. That
 somewhere is the **composition root** — the one place that knows the concrete
 types and wires them together. Open
-[`internal/server/server.go`](../../internal/server/server.go):
+[`internal/server/server.go`](../../backend/internal/server/server.go):
 
 ```go
 func New(cfg config.Config, static StaticFiles) (*Server, error) {
@@ -244,7 +244,7 @@ imports nothing from the outer rings. Let's see one vertical slice.
 
 ### Example: adding a custom DNS record
 
-Trace [`internal/application/records/service.go`](../../internal/application/records/service.go):
+Trace [`internal/application/records/service.go`](../../backend/internal/application/records/service.go):
 
 ```go
 func (s *Service) Add(ctx context.Context, domain, ip string) error {
@@ -278,7 +278,7 @@ Principle made physical via package boundaries.
 The domain uses two tactical patterns worth naming.
 
 **Value object** — a small immutable type that is *always valid* because the
-only way to construct it validates. [`records.IP`](../../internal/domain/records/value_obj.go):
+only way to construct it validates. [`records.IP`](../../backend/internal/domain/records/value_obj.go):
 
 ```go
 func NewIP(raw string) (IP, error) {
@@ -295,7 +295,7 @@ You cannot create an `IP` holding `"not-an-ip"`. Once you have an `IP`, you neve
 re-check it. Invalid states are unrepresentable.
 
 **Aggregate** — a cluster of value objects with invariants, constructed through
-one root. [`records.Record`](../../internal/domain/records/entity.go):
+one root. [`records.Record`](../../backend/internal/domain/records/entity.go):
 
 ```go
 func New(domain, ip string) (Record, error) {
@@ -312,7 +312,7 @@ func New(domain, ip string) (Record, error) {
 ```
 
 A `Record` is valid by construction. The steering domain
-([`domain/steering/rule.go`](../../internal/domain/steering/rule.go)) does the
+([`domain/steering/rule.go`](../../backend/internal/domain/steering/rule.go)) does the
 same for rules, validating the condition/action combination up front. This is
 why the refactor pulled steering into a real domain package — so its rules are
 validated in one place instead of scattered across handlers.

@@ -17,7 +17,7 @@ keyword. They're extremely lightweight (a few KB of stack), so a Go program
 happily runs thousands.
 
 The server spawns one goroutine **per incoming UDP packet**. From
-[`internal/server/listeners.go`](../../internal/server/listeners.go):
+[`internal/server/listeners.go`](../../backend/internal/server/listeners.go):
 
 ```go
 n, client, err := conn.ReadFromUDP(buf)
@@ -93,7 +93,7 @@ A **channel** is a typed pipe that safely passes values between goroutines.
 
 The query-log writer is the textbook example. Writing to SQLite on every single
 DNS query would be slow, so logs are **batched**. Open
-[`internal/db/sqlite.go`](../../internal/db/sqlite.go):
+[`internal/db/sqlite.go`](../../backend/internal/db/sqlite.go):
 
 ```go
 type DB struct {
@@ -200,7 +200,7 @@ Channels are great for *handing off* values. But sometimes many goroutines need
 to read and write **shared state** — like the DNS cache. For that, Go uses a
 **mutex** (mutual exclusion lock).
 
-Open [`internal/dns/cache/cache.go`](../../internal/dns/cache/cache.go):
+Open [`internal/dns/cache/cache.go`](../../backend/internal/dns/cache/cache.go):
 
 ```go
 type Cache struct {
@@ -267,7 +267,7 @@ Several components do periodic work on their own goroutine. The pattern is
 always: `NewTicker` + `for { select { <-ticker.C ... <-stop ... } }`.
 
 **The forwarder health loop** —
-[`internal/dns/forwarder/health.go`](../../internal/dns/forwarder/health.go):
+[`internal/dns/forwarder/health.go`](../../backend/internal/dns/forwarder/health.go):
 
 ```go
 func (p *Pool) healthLoop() {
@@ -290,7 +290,7 @@ func (p *Pool) healthLoop() {
 expired entries (so dead entries don't linger between lazy expiries on `Get`).
 
 **The ARP refresher** —
-[`internal/dns/arp/arp.go`](../../internal/dns/arp/arp.go) — reloads the
+[`internal/dns/arp/arp.go`](../../backend/internal/dns/arp/arp.go) — reloads the
 IP→MAC table on its interval:
 
 ```go
@@ -331,7 +331,7 @@ How do all those background loops know to stop? Through a **`context.Context`** 
 Go's standard mechanism for cancellation and deadlines that flows across
 goroutine boundaries.
 
-Open [`internal/server/server.go`](../../internal/server/server.go), `Run`:
+Open [`internal/server/server.go`](../../backend/internal/server/server.go), `Run`:
 
 ```go
 func (s *Server) Run() error {

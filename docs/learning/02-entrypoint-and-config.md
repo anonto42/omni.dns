@@ -7,7 +7,7 @@
 
 ## 2.1 `func main()` — small on purpose
 
-Open [`cmd/dns-server/main.go`](../../cmd/dns-server/main.go):
+Open [`cmd/dns-server/main.go`](../../backend/cmd/dns-server/main.go):
 
 ```go
 func main() {
@@ -74,7 +74,7 @@ init failed, there's nothing meaningful to clean up yet.
 
 ## 2.2 Configuration: flags, environment, defaults
 
-Open [`internal/config/config.go`](../../internal/config/config.go). The `Config`
+Open [`internal/config/config.go`](../../backend/internal/config/config.go). The `Config`
 struct is the single source of truth for every tunable:
 
 ```go
@@ -175,7 +175,7 @@ This is a genuinely advanced Go feature, and OmniDNS uses it in two places.
 ### UI embedding (prod vs dev)
 
 There are two files that define the *same* functions but compile under
-different conditions. [`cmd/dns-server/embed_prod.go`](../../cmd/dns-server/embed_prod.go):
+different conditions. [`cmd/dns-server/embed_prod.go`](../../backend/cmd/dns-server/embed_prod.go):
 
 ```go
 //go:build embed
@@ -190,7 +190,7 @@ func getFileSystem() http.FileSystem { /* serve embedded files */ }
 func isEmbedded() bool { return true }
 ```
 
-[`cmd/dns-server/embed_dev.go`](../../cmd/dns-server/embed_dev.go):
+[`cmd/dns-server/embed_dev.go`](../../backend/cmd/dns-server/embed_dev.go):
 
 ```go
 //go:build !embed
@@ -228,11 +228,11 @@ implementation at *compile* time, with zero runtime cost.
 ### Platform-specific code (Linux vs the rest)
 
 The ARP cache (Chapter 4) reads `/proc/net/arp`, which only exists on Linux.
-Same technique, in [`internal/dns/arp/`](../../internal/dns/arp/):
+Same technique, in [`internal/dns/arp/`](../../backend/internal/dns/arp/):
 
-- [`table_linux.go`](../../internal/dns/arp/table_linux.go) → `//go:build linux`,
+- [`table_linux.go`](../../backend/internal/dns/arp/table_linux.go) → `//go:build linux`,
   parses `/proc/net/arp`.
-- [`table_other.go`](../../internal/dns/arp/table_other.go) → `//go:build !linux`,
+- [`table_other.go`](../../backend/internal/dns/arp/table_other.go) → `//go:build !linux`,
   returns an empty table.
 
 So the project **compiles on macOS/Windows** (where it returns empty MACs) and

@@ -21,7 +21,7 @@ type Handler interface {
   body.
 
 A plain function with that signature is a handler via `http.HandlerFunc`. Our
-simplest one, in [`internal/api/handlers/handlers.go`](../../internal/api/handlers/handlers.go):
+simplest one, in [`internal/api/handlers/handlers.go`](../../backend/internal/api/handlers/handlers.go):
 
 ```go
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +37,7 @@ That's the whole contract. Frameworks just make routing and composition nicer.
 
 We use [`go-chi/chi`](https://github.com/go-chi/chi), a lightweight router that's
 100% compatible with `net/http`. The route table is in
-[`internal/api/router.go`](../../internal/api/router.go):
+[`internal/api/router.go`](../../backend/internal/api/router.go):
 
 ```go
 func RegisterRoutes(r chi.Router, database *db.DB, h *handlers.Handler) {
@@ -76,7 +76,7 @@ Two things to learn:
 Middleware is a function that **takes a handler and returns a handler**, doing
 work before/after the inner one. The signature is always
 `func(http.Handler) http.Handler`. The chain is assembled in
-[`internal/server/server.go`](../../internal/server/server.go):
+[`internal/server/server.go`](../../backend/internal/server/server.go):
 
 ```go
 r := chi.NewRouter()
@@ -94,7 +94,7 @@ out.
 
 The old code sent `Access-Control-Allow-Origin: *`, which is dangerous with
 bearer tokens (any website could call your API on your behalf). The new CORS
-middleware, in [`internal/api/middleware/middleware.go`](../../internal/api/middleware/middleware.go),
+middleware, in [`internal/api/middleware/middleware.go`](../../backend/internal/api/middleware/middleware.go),
 echoes a *specific* origin:
 
 ```go
@@ -219,7 +219,7 @@ if !decodeJSON(w, r, &body) {
 ### Struct tags drive (de)serialization
 
 How does Go know the JSON field names? **Struct tags**, in
-[`internal/db/models/models.go`](../../internal/db/models/models.go):
+[`internal/db/models/models.go`](../../backend/internal/db/models/models.go):
 
 ```go
 type AddRecordRequest struct {
@@ -238,7 +238,7 @@ convention with lowercase JSON conventions.
 ## 7.5 A handler end to end
 
 Put it together — `AddRecord` in
-[`internal/api/handlers/records.go`](../../internal/api/handlers/records.go):
+[`internal/api/handlers/records.go`](../../backend/internal/api/handlers/records.go):
 
 ```go
 func (h *Handler) AddRecord(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +277,7 @@ translation layer for one resource.
 
 ## 7.6 Serving the single-page app
 
-Non-API routes serve the React UI. [`internal/server/static.go`](../../internal/server/static.go)
+Non-API routes serve the React UI. [`internal/server/static.go`](../../backend/internal/server/static.go)
 has a small but important trick — the SPA fallback:
 
 ```go

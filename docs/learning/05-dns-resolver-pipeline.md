@@ -26,7 +26,7 @@ the refactor's correctness fix. Keep it in mind.
 
 ## 5.2 From packet to message: the handler adapter
 
-Open [`internal/dns/handler.go`](../../internal/dns/handler.go). This thin layer
+Open [`internal/dns/handler.go`](../../backend/internal/dns/handler.go). This thin layer
 converts wire-format bytes ↔ a parsed `*dns.Msg` (from the `miekg/dns` library)
 and delegates the *thinking* to the resolver.
 
@@ -61,7 +61,7 @@ knows DNS policy. Neither knows the other's job.
 
 ## 5.3 The pipeline, top to bottom
 
-Open [`internal/dns/resolver/resolver.go`](../../internal/dns/resolver/resolver.go).
+Open [`internal/dns/resolver/resolver.go`](../../backend/internal/dns/resolver/resolver.go).
 `Resolve` is the entry point and reads like a table of contents:
 
 ```go
@@ -195,7 +195,7 @@ refresh. Steering rules change rarely but are read on every query, so this trade
 
 ### Condition matching
 
-[`internal/dns/resolver/matching.go`](../../internal/dns/resolver/matching.go)
+[`internal/dns/resolver/matching.go`](../../backend/internal/dns/resolver/matching.go)
 holds the pure matching logic — no I/O, trivially testable:
 
 ```go
@@ -378,7 +378,7 @@ latency for *every* answer shape.
 
 ## 5.8 Building the reply: A vs AAAA vs NODATA vs NXDOMAIN
 
-Open [`internal/dns/resolver/responses.go`](../../internal/dns/resolver/responses.go).
+Open [`internal/dns/resolver/responses.go`](../../backend/internal/dns/resolver/responses.go).
 This is where an outcome becomes wire-correct DNS.
 
 ```go
@@ -481,7 +481,7 @@ the pipeline structure.
    for an **AAAA** query of a domain that has only an IPv4 custom record? (Answer:
    NODATA — `stepCustomRecords`, `existsOtherType` branch.) Now confirm with the
    test `TestCustomRecordAAAAOverA_ReturnsNoData` in
-   [`resolver_test.go`](../../internal/dns/resolver/resolver_test.go).
+   [`resolver_test.go`](../../backend/internal/dns/resolver/resolver_test.go).
 2. **Add a step.** Imagine a "safe search" step that rewrites `google.com` →
    `forcesafesearch.google.com`. Where in `Resolve`'s chain would it go, and what
    would it return? Sketch the method signature.
