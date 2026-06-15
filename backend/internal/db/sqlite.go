@@ -1,115 +1,105 @@
+// Package db provides SQLite-backed persistence: connection setup, schema
+// migrations, and a buffered query-log writer. Domain-specific access lives in
+// the repositories subpackage and in the typed methods on DB.
 package db
 
 import (
-	"bufio"
-	"crypto/rand"
-	"crypto/subtle"
+	"context"
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/sohidul/dns-server/internal/models"
-	"golang.org/x/crypto/argon2"
+	"github.com/sohidul/dns-server/internal/db/models"
 	_ "modernc.org/sqlite"
 )
 
-// lookupMAC reads /proc/net/arp to find the MAC address for a given IP.
-// Returns an empty string if not found or the file is unreadable.
-func lookupMAC(ip string) string {
-	f, err := os.Open("/proc/net/arp")
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	scanner.Scan() // skip header line
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) >= 4 && fields[0] == ip {
-			mac := fields[3]
-			if mac != "00:00:00:00:00:00" {
-				return mac
-			}
-		}
-	}
-	return ""
+// Options tunes the buffered log writer and session lifetime.
+type Options struct {
+	LogFlushInterval time.Duration
+	LogFlushSize     int
+	SessionTTL       time.Duration
 }
 
+func (o Options) withDefaults() Options {
+	if o.LogFlushInterval <= 0 {
+		o.LogFlushInterval = 5 * time.Second
+	}
+	if o.LogFlushSize <= 0 {
+		o.LogFlushSize = 100
+	}
+	if o.SessionTTL <= 0 {
+		o.SessionTTL = 24 * time.Hour
+	}
+	return o
+}
+
+// DB owns the SQLite connection and the asynchronous query-log buffer.
 type DB struct {
-	conn      *sql.DB
+	conn *sql.DB
+	opts Options
+
 	logChan   chan models.QueryLog
 	logBuffer []models.QueryLog
 	mu        sync.Mutex
 	quit      chan struct{}
+	flushDone chan struct{}
 }
 
-const (
-	argonTime    = 2
-	argonMemory  = 19 * 1024
-	argonThreads = 1
-	argonKeyLen  = 32
-	argonSaltLen = 16
-)
-
-func hashPassword(password string) (string, error) {
-	salt := make([]byte, argonSaltLen)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	hash := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
-	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
-	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s", argonMemory, argonTime, argonThreads, b64Salt, b64Hash), nil
-}
-
-func verifyPassword(password, encodedHash string) bool {
-	parts := strings.Split(encodedHash, "$")
-	if len(parts) != 6 {
-		return false
-	}
-	var memory, time uint32
-	var threads uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
-		return false
-	}
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
-		return false
-	}
-	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
-		return false
-	}
-	computed := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(hash)))
-	return subtle.ConstantTimeCompare(hash, computed) == 1
-}
-
-func Open(path string) (*DB, error) {
+// Open connects to the SQLite database at path, applies pragmas and migrations,
+// and starts the background log-buffer flusher.
+func Open(path string, opts Options) (*DB, error) {
 	conn, err := sql.Open("sqlite", path)
 	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA synchronous=NORMAL",
+	} {
+		if _, err := conn.Exec(pragma); err != nil {
+			return nil, fmt.Errorf("apply %q: %w", pragma, err)
+		}
+	}
+	if err := createSchema(conn); err != nil {
 		return nil, err
 	}
-	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return nil, err
-	}
-	if _, err := conn.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return nil, err
-	}
-	if _, err := conn.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+	if err := migrate(conn); err != nil {
 		return nil, err
 	}
 
-	queries := []string{
+	db := &DB{
+		conn:      conn,
+		opts:      opts.withDefaults(),
+		logChan:   make(chan models.QueryLog, 1000),
+		quit:      make(chan struct{}),
+		flushDone: make(chan struct{}),
+	}
+	go db.processLogBuffer()
+	return db, nil
+}
+
+// Conn exposes the underlying connection for repository implementations.
+func (db *DB) Conn() *sql.DB { return db.conn }
+
+// Close stops the flusher, drains any buffered logs, and closes the connection.
+func (db *DB) Close() error {
+	close(db.quit)
+	<-db.flushDone // wait for the flusher goroutine to drain and exit
+	return db.conn.Close()
+}
+
+func createSchema(conn *sql.DB) error {
+	stmts := []string{
 		"CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT, name TEXT DEFAULT 'Administrator')",
-		"CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT, created_at TEXT)",
+		"CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT, created_at TEXT, expires_at TEXT)",
 		"CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
 		"CREATE TABLE IF NOT EXISTS query_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, domain TEXT, client_ip TEXT, action TEXT, mac_address TEXT DEFAULT '', protocol TEXT DEFAULT '', query_type TEXT DEFAULT '', response_code TEXT DEFAULT '', resolved_ip TEXT DEFAULT '', all_answers TEXT DEFAULT '', answer_count INTEGER DEFAULT 0, ttl INTEGER DEFAULT 0, upstream_resolver TEXT DEFAULT '', latency_ms REAL DEFAULT 0)",
-		"CREATE TABLE IF NOT EXISTS custom_records (domain TEXT PRIMARY KEY, ip TEXT)",
+		// custom_records keyed by (domain, qtype): 1 = A, 28 = AAAA.
+		"CREATE TABLE IF NOT EXISTS custom_records (domain TEXT, ip TEXT, qtype INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (domain, qtype))",
 		"CREATE TABLE IF NOT EXISTS blocklist (domain TEXT PRIMARY KEY, added_at TEXT, wildcard INTEGER DEFAULT 0)",
 		`CREATE TABLE IF NOT EXISTS steering_rules (
 			id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,26 +120,21 @@ func Open(path string) (*DB, error) {
 			read INTEGER DEFAULT 0
 		)`,
 	}
-	for _, q := range queries {
+	for _, q := range stmts {
 		if _, err := conn.Exec(q); err != nil {
-			return nil, err
+			return fmt.Errorf("create schema: %w", err)
 		}
 	}
-	if err := migrate(conn); err != nil {
-		return nil, err
-	}
-	db := &DB{
-		conn:    conn,
-		logChan: make(chan models.QueryLog, 1000),
-		quit:    make(chan struct{}),
-	}
-	go db.processLogBuffer()
-	return db, nil
+	return nil
 }
 
+// migrate applies additive, idempotent schema changes for upgrades from older
+// databases. Duplicate-column errors are expected and ignored.
 func migrate(conn *sql.DB) error {
-	queries := []string{
+	stmts := []string{
 		"ALTER TABLE users ADD COLUMN name TEXT DEFAULT 'Administrator'",
+		"ALTER TABLE sessions ADD COLUMN expires_at TEXT",
+		"ALTER TABLE custom_records ADD COLUMN qtype INTEGER NOT NULL DEFAULT 1",
 		"ALTER TABLE query_logs ADD COLUMN mac_address TEXT DEFAULT ''",
 		"ALTER TABLE query_logs ADD COLUMN protocol TEXT DEFAULT ''",
 		"ALTER TABLE query_logs ADD COLUMN query_type TEXT DEFAULT ''",
@@ -161,10 +146,9 @@ func migrate(conn *sql.DB) error {
 		"ALTER TABLE query_logs ADD COLUMN upstream_resolver TEXT DEFAULT ''",
 		"ALTER TABLE query_logs ADD COLUMN latency_ms REAL DEFAULT 0",
 	}
-
-	for _, query := range queries {
-		if _, err := conn.Exec(query); err != nil && !isDuplicateColumnErr(err) {
-			return err
+	for _, q := range stmts {
+		if _, err := conn.Exec(q); err != nil && !isDuplicateColumnErr(err) {
+			return fmt.Errorf("migrate %q: %w", q, err)
 		}
 	}
 	return nil
@@ -174,58 +158,58 @@ func isDuplicateColumnErr(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "duplicate column")
 }
 
-func (db *DB) Close() error {
-	close(db.quit)
-	db.Flush()
-	return db.conn.Close()
-}
+// --- buffered query logging ----------------------------------------------
 
-func (db *DB) InitAdmin(email, password string) error {
-	hashedPassword, err := hashPassword(password)
-	if err != nil {
-		return err
-	}
-	_, err = db.conn.Exec("INSERT OR IGNORE INTO users (email, password) VALUES (?, ?)", email, hashedPassword)
-	return err
-}
-
-func (db *DB) VerifyUser(email, password string) bool {
-	var hashedPassword string
-	err := db.conn.QueryRow("SELECT password FROM users WHERE email = ?", email).Scan(&hashedPassword)
-	if err != nil {
-		return false
-	}
-	return verifyPassword(password, hashedPassword)
-}
-
+// LogQuery enqueues a query log for asynchronous persistence.
 func (db *DB) LogQuery(log models.QueryLog) {
 	log.Timestamp = time.Now()
-	log.MACAddress = lookupMAC(log.ClientIP)
-	db.logChan <- log
+	select {
+	case db.logChan <- log:
+	default:
+		slog.Warn("query log buffer full; dropping entry", "domain", log.Domain)
+	}
 }
 
 func (db *DB) processLogBuffer() {
-	ticker := time.NewTicker(5 * time.Second)
+	defer close(db.flushDone)
+	ticker := time.NewTicker(db.opts.LogFlushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case log := <-db.logChan:
 			db.mu.Lock()
 			db.logBuffer = append(db.logBuffer, log)
-			shouldFlush := len(db.logBuffer) >= 100
+			full := len(db.logBuffer) >= db.opts.LogFlushSize
 			db.mu.Unlock()
-			if shouldFlush {
-				db.Flush()
+			if full {
+				db.flush()
 			}
 		case <-ticker.C:
-			db.Flush()
+			db.flush()
 		case <-db.quit:
+			db.drain()
+			db.flush()
 			return
 		}
 	}
 }
 
-func (db *DB) Flush() {
+// drain moves any logs still in the channel into the buffer so a shutdown
+// flush does not lose them.
+func (db *DB) drain() {
+	for {
+		select {
+		case log := <-db.logChan:
+			db.mu.Lock()
+			db.logBuffer = append(db.logBuffer, log)
+			db.mu.Unlock()
+		default:
+			return
+		}
+	}
+}
+
+func (db *DB) flush() {
 	db.mu.Lock()
 	if len(db.logBuffer) == 0 {
 		db.mu.Unlock()
@@ -242,7 +226,7 @@ func (db *DB) Flush() {
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			slog.Error("failed to rollback transaction", "error", err)
+			slog.Error("flush rollback failed", "error", err)
 		}
 	}()
 
@@ -254,8 +238,7 @@ func (db *DB) Flush() {
 	defer stmt.Close()
 
 	for _, log := range logs {
-		_, err := stmt.Exec(log.Timestamp.Format(time.RFC3339), log.Domain, log.ClientIP, log.Action, log.MACAddress, log.Protocol, log.QueryType, log.ResponseCode, log.ResolvedIP, log.AllAnswers, log.AnswerCount, log.TTL, log.UpstreamResolver, log.LatencyMs)
-		if err != nil {
+		if _, err := stmt.Exec(log.Timestamp.Format(time.RFC3339), log.Domain, log.ClientIP, log.Action, log.MACAddress, log.Protocol, log.QueryType, log.ResponseCode, log.ResolvedIP, log.AllAnswers, log.AnswerCount, log.TTL, log.UpstreamResolver, log.LatencyMs); err != nil {
 			slog.Error("flush exec failed", "error", err)
 		}
 	}
@@ -264,111 +247,10 @@ func (db *DB) Flush() {
 	}
 }
 
-func (db *DB) GetStats() models.Stats {
-	var forwarded, blocked, custom, cached int
-	if err := db.conn.QueryRow("SELECT COUNT(*) FROM query_logs WHERE action = 'forwarded'").Scan(&forwarded); err != nil {
-		slog.Error("get stats forwarded failed", "error", err)
-	}
-	if err := db.conn.QueryRow("SELECT COUNT(*) FROM query_logs WHERE action = 'blocked'").Scan(&blocked); err != nil {
-		slog.Error("get stats blocked failed", "error", err)
-	}
-	if err := db.conn.QueryRow("SELECT COUNT(*) FROM query_logs WHERE action = 'custom'").Scan(&custom); err != nil {
-		slog.Error("get stats custom failed", "error", err)
-	}
-	if err := db.conn.QueryRow("SELECT COUNT(*) FROM query_logs WHERE action = 'cached'").Scan(&cached); err != nil {
-		slog.Error("get stats cached failed", "error", err)
-	}
-	return models.Stats{
-		QueriesForwarded: forwarded,
-		QueriesBlocked:   blocked,
-		QueriesCustom:    custom,
-		QueriesCached:    cached,
-	}
-}
+// --- query log reads / maintenance ---------------------------------------
 
-func (db *DB) ClearLogs() {
-	if _, err := db.conn.Exec("DELETE FROM query_logs"); err != nil {
-		slog.Error("clear logs failed", "error", err)
-	}
-}
-
-func (db *DB) PruneLogs(t time.Time) {
-	if _, err := db.conn.Exec("DELETE FROM query_logs WHERE timestamp < ?", t.Format(time.RFC3339)); err != nil {
-		slog.Error("prune logs failed", "error", err)
-	}
-}
-
-func (db *DB) GetCustomRecord(domain string) string {
-	var ip string
-	err := db.conn.QueryRow("SELECT ip FROM custom_records WHERE domain = ?", domain).Scan(&ip)
-	if err != nil {
-		return ""
-	}
-	return ip
-}
-
-func (db *DB) IsBlocked(domain string) bool {
-	// Exact match: domain = ?
-	// Wildcard match: ? = 'sub.example.com' matches blocklist entry 'example.com' stored with wildcard=1
-	//   i.e. ? LIKE '%.example.com' OR ? = 'example.com'
-	var count int
-	err := db.conn.QueryRow(`
-		SELECT COUNT(*) FROM blocklist WHERE
-		  (wildcard = 0 AND domain = ?)
-		  OR (wildcard = 1 AND (? = domain OR ? LIKE '%.' || domain))
-	`, domain, domain, domain).Scan(&count)
-	if err != nil {
-		slog.Error("is blocked query failed", "error", err)
-	}
-	return count > 0
-}
-
-func (db *DB) CreateSession(email string) (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	token := base64.RawURLEncoding.EncodeToString(b)
-	_, err := db.conn.Exec("INSERT INTO sessions (token, email, created_at) VALUES (?, ?, ?)", token, email, time.Now().Format(time.RFC3339))
-	if err != nil {
-		return "", err
-	}
-	return token, nil
-}
-
-func (db *DB) VerifySession(token string) (string, bool) {
-	var email string
-	err := db.conn.QueryRow("SELECT email FROM sessions WHERE token = ?", token).Scan(&email)
-	if err != nil {
-		return "", false
-	}
-	return email, true
-}
-
-func (db *DB) DeleteSession(token string) {
-	if _, err := db.conn.Exec("DELETE FROM sessions WHERE token = ?", token); err != nil {
-		slog.Error("delete session failed", "error", err)
-	}
-}
-
-func (db *DB) GetSettings() map[string]string {
-	rows, err := db.conn.Query("SELECT key, value FROM settings")
-	if err != nil {
-		return map[string]string{}
-	}
-	defer rows.Close()
-	s := map[string]string{}
-	for rows.Next() {
-		var k, v string
-		if rows.Scan(&k, &v) == nil {
-			s[k] = v
-		}
-	}
-	return s
-}
-
-// GetLogs returns logs with optional filtering by action and domain substring,
-// and supports a configurable limit (0 = use defaultLimit).
+// GetLogsFiltered returns recent logs, optionally filtered by action and a
+// domain substring. limit is clamped to (0, 1000]; 0 means the default of 100.
 func (db *DB) GetLogsFiltered(limit int, action, domain string) []models.QueryLog {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
@@ -388,6 +270,7 @@ func (db *DB) GetLogsFiltered(limit int, action, domain string) []models.QueryLo
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
+		slog.Error("get logs failed", "error", err)
 		return []models.QueryLog{}
 	}
 	defer rows.Close()
@@ -407,182 +290,53 @@ func (db *DB) GetLogsFiltered(limit int, action, domain string) []models.QueryLo
 	return logs
 }
 
-func (db *DB) GetSteeringRules() []models.SteeringRule {
-	rows, err := db.conn.Query("SELECT id, name, condition_type, condition_value, action_type, action_target, priority, enabled FROM steering_rules ORDER BY priority ASC, id ASC")
+// ClearLogs deletes all query logs.
+func (db *DB) ClearLogs() {
+	if _, err := db.conn.Exec("DELETE FROM query_logs"); err != nil {
+		slog.Error("clear logs failed", "error", err)
+	}
+}
+
+// PruneLogs deletes query logs older than t.
+func (db *DB) PruneLogs(t time.Time) {
+	if _, err := db.conn.Exec("DELETE FROM query_logs WHERE timestamp < ?", t.Format(time.RFC3339)); err != nil {
+		slog.Error("prune logs failed", "error", err)
+	}
+}
+
+// GetStats returns query-disposition counts using a single aggregate query.
+func (db *DB) GetStats() models.Stats {
+	var s models.Stats
+	err := db.conn.QueryRow(`
+		SELECT
+			SUM(CASE WHEN action = 'forwarded' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN action = 'blocked'   THEN 1 ELSE 0 END),
+			SUM(CASE WHEN action = 'custom'    THEN 1 ELSE 0 END),
+			SUM(CASE WHEN action = 'cached'    THEN 1 ELSE 0 END)
+		FROM query_logs
+	`).Scan(&nullInt{&s.QueriesForwarded}, &nullInt{&s.QueriesBlocked}, &nullInt{&s.QueriesCustom}, &nullInt{&s.QueriesCached})
 	if err != nil {
-		return []models.SteeringRule{}
+		slog.Error("get stats failed", "error", err)
 	}
-	defer rows.Close()
-	rules := make([]models.SteeringRule, 0)
-	for rows.Next() {
-		var r models.SteeringRule
-		var enabled int
-		if err := rows.Scan(&r.ID, &r.Name, &r.ConditionType, &r.ConditionValue, &r.ActionType, &r.ActionTarget, &r.Priority, &enabled); err != nil {
-			continue
-		}
-		r.Enabled = enabled != 0
-		rules = append(rules, r)
-	}
-	return rules
+	return s
 }
 
-func (db *DB) AddSteeringRule(r models.AddSteeringRuleRequest) (int64, error) {
-	enabled := 0
-	if r.Enabled {
-		enabled = 1
+// nullInt scans a possibly-NULL SUM() result into an int (NULL -> 0).
+type nullInt struct{ dst *int }
+
+func (n *nullInt) Scan(v any) error {
+	switch t := v.(type) {
+	case int64:
+		*n.dst = int(t)
+	case nil:
+		*n.dst = 0
 	}
-	res, err := db.conn.Exec(
-		"INSERT INTO steering_rules (name, condition_type, condition_value, action_type, action_target, priority, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		r.Name, r.ConditionType, r.ConditionValue, r.ActionType, r.ActionTarget, r.Priority, enabled,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	return nil
 }
 
-func (db *DB) UpdateSteeringRuleEnabled(id int64, enabled bool) {
-	e := 0
-	if enabled {
-		e = 1
-	}
-	if _, err := db.conn.Exec("UPDATE steering_rules SET enabled = ? WHERE id = ?", e, id); err != nil {
-		slog.Error("update steering rule failed", "error", err)
-	}
-}
-
-func (db *DB) DeleteSteeringRule(id int64) {
-	if _, err := db.conn.Exec("DELETE FROM steering_rules WHERE id = ?", id); err != nil {
-		slog.Error("delete steering rule failed", "error", err)
-	}
-}
-
-func (db *DB) ChangePassword(email, newPassword string) error {
-	hash, err := hashPassword(newPassword)
-	if err != nil {
-		return err
-	}
-	_, err = db.conn.Exec("UPDATE users SET password = ? WHERE email = ?", hash, email)
-	return err
-}
-
-func (db *DB) SaveSettings(settings map[string]string) {
-	tx, err := db.conn.Begin()
-	if err != nil {
-		slog.Error("settings tx begin failed", "error", err)
-		return
-	}
-	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			slog.Error("settings tx rollback failed", "error", err)
-		}
-	}()
-	stmt, err := tx.Prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
-	if err != nil {
-		slog.Error("settings prepare failed", "error", err)
-		return
-	}
-	defer stmt.Close()
-	for k, v := range settings {
-		if _, err := stmt.Exec(k, v); err != nil {
-			slog.Error("settings save failed", "key", k, "error", err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		slog.Error("settings commit failed", "error", err)
-	}
-}
-
-func (db *DB) AddNotification(notifType, title, message string) error {
-	createdAt := time.Now().UTC().Format(time.RFC3339)
-	_, err := db.conn.Exec("INSERT INTO notifications (type, title, message, created_at, read) VALUES (?, ?, ?, ?, 0)",
-		notifType, title, message, createdAt)
-	return err
-}
-
-func (db *DB) GetNotifications() ([]models.Notification, error) {
-	rows, err := db.conn.Query("SELECT id, type, title, message, created_at, read FROM notifications ORDER BY created_at DESC")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var notifs []models.Notification
-	for rows.Next() {
-		var n models.Notification
-		var readInt int
-		if err := rows.Scan(&n.ID, &n.Type, &n.Title, &n.Message, &n.CreatedAt, &readInt); err != nil {
-			return nil, err
-		}
-		n.Read = readInt == 1
-		notifs = append(notifs, n)
-	}
-	return notifs, nil
-}
-
-func (db *DB) MarkNotificationRead(id int64) error {
-	_, err := db.conn.Exec("UPDATE notifications SET read = 1 WHERE id = ?", id)
-	return err
-}
-
-func (db *DB) MarkAllNotificationsRead() error {
-	_, err := db.conn.Exec("UPDATE notifications SET read = 1")
-	return err
-}
-
-func (db *DB) DeleteNotification(id int64) error {
-	_, err := db.conn.Exec("DELETE FROM notifications WHERE id = ?", id)
-	return err
-}
-
-func (db *DB) ClearAllNotifications() error {
-	_, err := db.conn.Exec("DELETE FROM notifications")
-	return err
-}
-
-func (db *DB) GetProfile(email string) (string, error) {
-	var name string
-	err := db.conn.QueryRow("SELECT name FROM users WHERE email = ?", email).Scan(&name)
-	if err != nil {
-		return "", err
-	}
-	return name, nil
-}
-
-func (db *DB) UpdateProfile(oldEmail, newEmail, name string) error {
-	tx, err := db.conn.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			slog.Error("profile tx rollback failed", "error", err)
-		}
-	}()
-
-	// If email changes, check if the new email is already in use by another user
-	if oldEmail != newEmail {
-		var count int
-		err = tx.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", newEmail).Scan(&count)
-		if err != nil {
-			return err
-		}
-		if count > 0 {
-			return fmt.Errorf("email %s is already in use", newEmail)
-		}
-	}
-
-	// Update users table
-	_, err = tx.Exec("UPDATE users SET email = ?, name = ? WHERE email = ?", newEmail, name, oldEmail)
-	if err != nil {
-		return err
-	}
-
-	// Update sessions table so the active session maps to the new email
-	_, err = tx.Exec("UPDATE sessions SET email = ? WHERE email = ?", newEmail, oldEmail)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+// GetCustomRecord returns the IPv4 (A) record for a domain, kept for callers
+// that only need A. Prefer LookupRecord for qtype-aware resolution.
+func (db *DB) GetCustomRecord(domain string) string {
+	ip, _, _ := db.LookupRecord(context.Background(), domain, 1)
+	return ip
 }

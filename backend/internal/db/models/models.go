@@ -1,7 +1,10 @@
+// Package models holds the plain data structures shared across the transport,
+// application, and persistence layers.
 package models
 
 import "time"
 
+// Action is the disposition the resolver applied to a query.
 type Action string
 
 const (
@@ -12,6 +15,7 @@ const (
 	ActionError     Action = "error"
 )
 
+// QueryLog is a single recorded DNS query and its outcome.
 type QueryLog struct {
 	ID               int64     `json:"id" example:"1"`
 	Timestamp        time.Time `json:"timestamp" example:"2024-10-25T10:00:00Z"`
@@ -30,12 +34,14 @@ type QueryLog struct {
 	LatencyMs        float64   `json:"latency_ms" example:"12.5"`
 }
 
+// BlockedDomain is a blocklist entry as returned by the API.
 type BlockedDomain struct {
 	Domain   string    `json:"domain" example:"ads.example.com"`
 	AddedAt  time.Time `json:"added_at" example:"2024-10-25T10:00:00Z"`
 	Wildcard bool      `json:"wildcard" example:"false"`
 }
 
+// Stats summarizes query dispositions and cache state.
 type Stats struct {
 	QueriesForwarded int     `json:"queries_forwarded" example:"150"`
 	QueriesBlocked   int     `json:"queries_blocked" example:"20"`
@@ -81,6 +87,7 @@ type SteeringRule struct {
 	Enabled        bool   `json:"enabled"`
 }
 
+// AddSteeringRuleRequest is the body for creating a steering rule.
 type AddSteeringRuleRequest struct {
 	Name           string `json:"name"`
 	ConditionType  string `json:"condition_type"`
@@ -91,11 +98,13 @@ type AddSteeringRuleRequest struct {
 	Enabled        bool   `json:"enabled"`
 }
 
+// UpdateSteeringRuleRequest toggles a steering rule's enabled state.
 type UpdateSteeringRuleRequest struct {
 	ID      int64 `json:"id"`
 	Enabled bool  `json:"enabled"`
 }
 
+// DeleteSteeringRuleRequest identifies a steering rule to delete.
 type DeleteSteeringRuleRequest struct {
 	ID int64 `json:"id"`
 }
@@ -106,6 +115,7 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+// Notification is a user-facing notification entry.
 type Notification struct {
 	ID        int64  `json:"id"`
 	Type      string `json:"type"` // "success", "info", "warning", "error"
@@ -115,6 +125,7 @@ type Notification struct {
 	Read      bool   `json:"read"`
 }
 
+// ManageNotificationRequest marks/deletes one notification or all of them.
 type ManageNotificationRequest struct {
 	ID  int64 `json:"id"`
 	All bool  `json:"all"`
