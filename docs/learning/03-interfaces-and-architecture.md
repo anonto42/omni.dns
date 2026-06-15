@@ -46,7 +46,11 @@ a consumer actually needs.
 
 ### Who implements them?
 
-The `*db.DB` type implements **all five**, but it never says so. Look at
+The concrete type that implements **all five** lives in the
+`internal/infrastructure/persistence` package — its exported type is `DB`.
+Consumers import that package under the alias `db` (so `persistence.DB` reads as
+`db.DB` at the call site; see the import-alias discussion in Chapter 1). It never
+declares that it satisfies any interface. Look at
 [`internal/infrastructure/persistence/queries.go`](../../backend/internal/infrastructure/persistence/queries.go):
 
 ```go
@@ -78,21 +82,22 @@ The `*arp.Cache` type satisfies `MACResolver` the same way — it has a
 
 ## 3.2 Dependency inversion: who depends on whom
 
-Here's the crucial design idea. The `resolver` package defines the interfaces it
-*needs*. It does **not** import `db`. Instead, `db` (an outer layer) provides
-types that fit the resolver's interfaces.
+Here's the crucial design idea. The resolver's `domain` package defines the
+interfaces it *needs*. It does **not** import the `persistence` package. Instead,
+`persistence` (an outer layer) provides a type that fits those interfaces.
 
 ```
-   resolver  ──defines──►  Blocklist, CustomRecords, ... (ports.go)
-       ▲                              ▲
-       │ uses                         │ satisfies
-       │                              │
-   resolver.Resolve()            *db.DB  (in package db)
+   resolver/domain  ──defines──►  Blocklist, CustomRecords, ... (ports.go)
+       ▲                                    ▲
+       │ uses (engine)                      │ satisfies
+       │                                    │
+   resolver.Resolve()              persistence.DB  (aliased as db.DB)
 ```
 
-The arrow of **source-code dependency** points from `db` → `resolver` (db
-imports the resolver's `models`), while the arrow of **control** at runtime goes
-resolver → db. The dependency has been *inverted*. This is the "D" in SOLID, and
+The arrow of **source-code dependency** points from `persistence` → the resolver
+ports (persistence imports `shared/models`), while the arrow of **control** at
+runtime goes resolver → persistence. The dependency has been *inverted*. This is
+the "D" in SOLID, and
 it's why:
 
 - The resolver can be **unit-tested** with fake implementations (no SQLite, no
@@ -108,8 +113,9 @@ it's why:
 
 ### Where do the interfaces live? (A key Go convention)
 
-Notice the interfaces are defined in `resolver` (the **consumer**), not in `db`
-(the **provider**). In Go, **interfaces belong to the code that uses them**, not
+Notice the interfaces are defined in the resolver module (the **consumer**), not
+in `persistence` (the **provider**). In Go, **interfaces belong to the code that
+uses them**, not
 the code that implements them. This keeps providers ignorant of their consumers
 and lets each consumer ask for exactly the narrow slice it needs.
 
@@ -179,14 +185,16 @@ func New(cfg config.Config, static StaticFiles) (*Server, error) {
 		BlockNX:   cfg.BlockNX,
 	})
 
-	// 4. Build the application services and the API handler.
-	notifier := repositories.NewNotifications(database)
+	// 4. Build the application services and the API handler. Each module's
+	// repository lives in its own infrastructure/ package (aliased here as
+	// recordsinfra, blocklistinfra, …).
+	notifier := notificationinfra.NewNotifications(database)
 	apiHandler := handlers.New(
 		database,
 		res,
-		recordsapp.NewService(repositories.NewRecords(database), notifier),
-		blocklistapp.NewService(repositories.NewBlocklist(database), notifier),
-		steeringapp.NewService(repositories.NewSteering(database), notifier),
+		recordsapp.NewService(recordsinfra.NewRecords(database), notifier),
+		blocklistapp.NewService(blocklistinfra.NewBlocklist(database), notifier),
+		steeringapp.NewService(steeringinfra.NewSteering(database), notifier),
 	)
 
 	return &Server{ /* hold all the components */ }, nil
@@ -263,9 +271,9 @@ func (s *Service) Add(ctx context.Context, domain, ip string) error {
   and a valid IP." If it returns `ErrInvalidIP`, no database call happens.
 - The **service** orchestrates: validate → save → notify. It depends only on the
   `Repository` and `Notifier` *interfaces* (defined in the domain), never on
-  `db`.
-- The concrete `repositories.Records` (which *does* know SQL) is injected at the
-  composition root.
+  the persistence package.
+- The concrete `records/infrastructure.Records` (which *does* know SQL) is
+  injected at the composition root.
 
 The HTTP handler (Chapter 7) sits above this and only translates JSON ↔ service
 calls. Each layer has **one reason to change**, the Single Responsibility
