@@ -45,7 +45,7 @@ export const LoginPresenter: React.FC<LoginPresenterProps> = ({
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full bg-[#14191f] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 border border-border rounded-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-[#000204] transition-all duration-200 font-medium h-10"
+                className="w-full bg-background dark:bg-[#14191f] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 border border-border rounded-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background dark:focus-visible:bg-[#000204] transition-all duration-200 font-medium h-10"
                 placeholder="admin@omnidns.local"
                 autoFocus
               />
@@ -61,7 +61,7 @@ export const LoginPresenter: React.FC<LoginPresenterProps> = ({
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-[#14191f] px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground/60 border border-border rounded-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-[#000204] transition-all duration-200 font-medium h-10"
+                  className="w-full bg-background dark:bg-[#14191f] px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground/60 border border-border rounded-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-background dark:focus-visible:bg-[#000204] transition-all duration-200 font-medium h-10"
                   placeholder="Enter your password"
                 />
                 <button
