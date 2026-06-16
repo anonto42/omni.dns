@@ -12,13 +12,7 @@ import (
 
 // GetSteeringRules returns all steering rules.
 func (h *Handler) GetSteeringRules(w http.ResponseWriter, r *http.Request) {
-	rules, err := h.steering.List(r.Context())
-	if err != nil {
-		slog.Error("list steering rules failed", "error", err)
-		respond(w, http.StatusInternalServerError, map[string]string{"error": "failed to retrieve rules"})
-		return
-	}
-	respond(w, http.StatusOK, rules)
+	respond(w, http.StatusOK, h.db.GetSteeringRules())
 }
 
 // AddSteeringRule creates a new steering rule.

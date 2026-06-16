@@ -13,7 +13,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 SHELL := /bin/bash
 
-DC_PROD  := docker compose -f docker/docker-compose.yml
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
+ENV_FILE_ARG := $(if $(wildcard .env),--env-file .env,)
+PROD_DNS_ADDR := $(or $(OMNIDNS_DNS_ADDR),your host LAN IP)
+PROD_DNS_PORT := $(or $(OMNIDNS_DNS_PORT),53)
+PROD_HTTP_PORT := $(or $(OMNIDNS_HTTP_PORT),8080)
+
+DC_PROD  := docker compose $(ENV_FILE_ARG) -f docker/docker-compose.yml
 DC_DEV   := docker compose -f docker/docker-compose.dev.yml
 DC_TEST  := docker compose -f docker/docker-compose.test.yml
 
@@ -90,8 +100,8 @@ up: ## Build production image and start the stack (detached)
 	$(DC_PROD) build
 	@echo "$(YELLOW)Starting production stack...$(RESET)"
 	$(DC_PROD) up -d --force-recreate
-	@echo "$(GREEN)Running. Dashboard → http://localhost:8080$(RESET)"
-	@echo "$(GREEN)DNS      → your host LAN IP:53 (UDP)$(RESET)"
+	@echo "$(GREEN)Running. Dashboard → http://localhost:$(PROD_HTTP_PORT)$(RESET)"
+	@echo "$(GREEN)DNS      → $(PROD_DNS_ADDR):$(PROD_DNS_PORT) (UDP)$(RESET)"
 
 .PHONY: down
 down: ## Stop all running stacks (prod + dev)

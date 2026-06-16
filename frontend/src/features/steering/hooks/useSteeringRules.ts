@@ -8,6 +8,19 @@ import type { SteeringRule } from '../types'
 
 // ── Hook ─────────────────────────────────────────────────────────────────
 
+const text = (value: unknown) => typeof value === 'string' ? value : ''
+
+const normalizeRule = (rule: Partial<SteeringRule> | null | undefined): SteeringRule => ({
+  id: Number(rule?.id ?? 0),
+  name: text(rule?.name),
+  condition_type: text(rule?.condition_type),
+  condition_value: text(rule?.condition_value),
+  action_type: text(rule?.action_type),
+  action_target: text(rule?.action_target),
+  priority: Number(rule?.priority ?? 0),
+  enabled: Boolean(rule?.enabled),
+})
+
 export function useSteeringRules() {
   const [rules, setRules] = useState<SteeringRule[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,7 +42,7 @@ export function useSteeringRules() {
   const fetchRules = useCallback(async () => {
     try {
       const data = await apiGet<SteeringRule[]>('/steering')
-      setRules(data ?? [])
+      setRules((data ?? []).map(normalizeRule))
     } catch {
       toast.error('Failed to load steering rules')
     } finally {
@@ -122,9 +135,9 @@ export function useSteeringRules() {
   const activeCount = rules.filter(r => r.enabled).length
 
   const filteredRules = rules.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.condition_value.toLowerCase().includes(search.toLowerCase()) ||
-    (r.action_target && r.action_target.toLowerCase().includes(search.toLowerCase()))
+    text(r.name).toLowerCase().includes(search.toLowerCase()) ||
+    text(r.condition_value).toLowerCase().includes(search.toLowerCase()) ||
+    text(r.action_target).toLowerCase().includes(search.toLowerCase())
   )
 
   return {
