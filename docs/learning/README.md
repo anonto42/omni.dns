@@ -1,12 +1,15 @@
 # Learn Go by Reading OmniDNS — A Project-Based Course
 
-This is a **learning resource** built around the real OmniDNS backend in this
+This is a **learning resource** built around the real OmniDNS codebase in this
 repository. Instead of toy examples, every concept is taught by pointing at
 actual code you can open, run, modify, and break.
 
-By the end you will understand the whole backend **line by line**, and along the
-way you will have learned idiomatic Go: packages, interfaces, goroutines,
-channels, `context`, `database/sql`, HTTP servers, build tags, and testing.
+By the end you will understand the whole backend **line by line**, and you will
+also have a project-specific full-stack system-design map for connecting the
+React dashboard, Go API, DNS resolver, persistence layer, and deployment model.
+Along the way you will have learned idiomatic Go: packages, interfaces,
+goroutines, channels, `context`, `database/sql`, HTTP servers, build tags, and
+testing.
 
 ---
 
@@ -155,6 +158,7 @@ is what makes it testable and what we will keep returning to.
 | [7](07-http-api.md) | `net/http`, chi, middleware, JSON, auth | `interfaces/http/` |
 | [8](08-testing-and-optimizations.md) | Testing, the race detector, perf wins, exercises | `*_test.go` |
 | [9](09-performance-optimization.md) | Hot-path analysis, caching, locks, batching, profiling | `resolver/engine/{cache,forwarder}`, `persistence/` |
+| [10](10-full-stack-system-design.md) | HLD, LLD, frontend/backend architecture, API contracts, async work, codebase decisions | `frontend/src`, `internal/server`, `internal/interfaces`, `internal/modules` |
 
 Start with [Chapter 1 →](01-go-foundations.md)
 
