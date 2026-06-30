@@ -29,7 +29,7 @@ type PieEntry = {
 export const CHART_POINTS = 30
 
 export const TOOLTIP_STYLE = {
-  background: 'hsl(var(--card))',
+  background: 'var(--card)',
   border: 'none',
   borderRadius: 0,
   fontSize: 11,
@@ -88,7 +88,7 @@ export function useNetworkLoad() {
   const pieData = useMemo<PieEntry[]>(() => [
     { name: 'Allowed', value: cumulative.forwarded, pct: cumPctAllowed,  color: '#22c55e' },
     { name: 'Blocked', value: cumulative.blocked,   pct: cumPctBlocked,  color: '#f43f5e' },
-    { name: 'Cached',  value: cumulative.cached,    pct: cumPctCached,   color: 'hsl(var(--primary))' },
+    { name: 'Cached',  value: cumulative.cached,    pct: cumPctCached,   color: 'var(--primary)' },
   ].filter(d => d.value > 0), [cumulative, cumPctAllowed, cumPctBlocked, cumPctCached])
 
   const hasData = cumTotal > 0

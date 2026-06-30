@@ -71,8 +71,8 @@ export default function NetworkLoadChart() {
                       <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradCached" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      <stop offset="5%"  stopColor="var(--primary)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06} vertical={false} />
@@ -93,14 +93,14 @@ export default function NetworkLoadChart() {
                   />
                   <RechartsTooltip
                     contentStyle={TOOLTIP_STYLE}
-                    labelStyle={{ color: 'hsl(var(--muted-foreground))', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 9 }}
-                    itemStyle={{ color: 'hsl(var(--foreground))' }}
-                    cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 2' }}
+                    labelStyle={{ color: 'var(--muted-foreground)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 9 }}
+                    itemStyle={{ color: 'var(--foreground)' }}
+                    cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeDasharray: '4 2' }}
                     formatter={(value: number, name: string) => [`${value} req`, name]}
                   />
                   <Area type="monotone" dataKey="allowed" name="Allowed" stroke="#22c55e" strokeWidth={1.5} fill="url(#gradAllowed)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
                   <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#f43f5e" strokeWidth={1.5} fill="url(#gradBlocked)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-                  <Area type="monotone" dataKey="cached"  name="Cached"  stroke="hsl(var(--primary))" strokeWidth={1.5} fill="url(#gradCached)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="cached"  name="Cached"  stroke="var(--primary)" strokeWidth={1.5} fill="url(#gradCached)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -127,7 +127,7 @@ export default function NetworkLoadChart() {
                       </Pie>
                       <RechartsTooltip
                         contentStyle={TOOLTIP_STYLE}
-                        itemStyle={{ color: 'hsl(var(--foreground))' }}
+                        itemStyle={{ color: 'var(--foreground)' }}
                         formatter={(value: number, name: string) => [value.toLocaleString(), name]}
                       />
                     </PieChart>
