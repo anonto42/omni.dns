@@ -3,8 +3,7 @@ services:
   backend:
     build:
       context: ../
-      dockerfile: docker/Dockerfile
-      target: dev
+      dockerfile: docker/Dockerfile.dev
     image: dns-server:dev
     container_name: dns-server-dev
     ports:

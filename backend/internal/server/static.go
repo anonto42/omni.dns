@@ -10,11 +10,13 @@ import (
 func (s *Server) registerStaticRoutes(r chi.Router) {
 	if s.static.Embedded {
 		slog.Info("serving embedded static files")
+		r.Handle("/", spaFileServer(s.static.FileSystem))
 		r.Handle("/*", spaFileServer(s.static.FileSystem))
 		return
 	}
 	if s.cfg.StaticDir != "" {
 		slog.Info("serving static files", "dir", s.cfg.StaticDir)
+		r.Handle("/", spaFileServer(http.Dir(s.cfg.StaticDir)))
 		r.Handle("/*", spaFileServer(http.Dir(s.cfg.StaticDir)))
 	}
 }
